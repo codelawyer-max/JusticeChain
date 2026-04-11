@@ -1,0 +1,24 @@
+{
+  "name": "Justice-Chain",
+  "version": "1.0.0",
+  "description": "Justice Chain - Blockchain-based FIR Management System",
+  "main": "index.js",
+  "scripts": {
+    "install:all": "npm install && npm --prefix frontend install && npm --prefix backend install && npm --prefix blockchainbackend install && npm --prefix zk-fabric/relayer install",
+    "dev": "concurrently \"npm --prefix frontend run dev\" \"npm --prefix backend start\"",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "dev:backend": "npm --prefix backend start",
+    "build": "npm --prefix frontend run build",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "blockchain",
+    "fir",
+    "justice"
+  ],
+  "author": "vaibhav",
+  "license": "ISC",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
