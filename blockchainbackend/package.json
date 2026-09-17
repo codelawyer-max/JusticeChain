@@ -8,6 +8,7 @@
     "ethers": "^6.15.0",
     "express": "^5.2.0",
     "jsonwebtoken": "^9.0.2",
+    "Justice-Chain": "file:../..",
     "mongoose": "^9.0.0",
     "multer": "^2.0.2",
     "pdf-lib": "^1.17.1"

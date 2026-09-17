@@ -28,15 +28,13 @@ const Footer = () => {
                 </svg>
               </div>
               <div className="ml-3">
-                <h3 className="text-lg font-bold">Justice Chain</h3>
-                <p className="text-sm text-gray-400">Digital FIR System</p>
+                <h3 className="text-lg font-bold">JusticeChain</h3>
+                <p className="text-sm text-gray-400">Secure Legal Records Portal</p>
               </div>
             </div>
             <p className="text-gray-300 mb-6 leading-relaxed">
-              A secure, transparent, and accessible digital platform for filing
-              and tracking First Information Reports. Empowering citizens with
-              technology-driven justice services while maintaining the highest
-              standards of security and privacy.
+              A secure, role-based platform for managing investigation records,
+              forensic reports, court filings, legal notices, and judgements.
             </p>
             <div className="flex flex-wrap gap-4">
               <div className="flex items-center text-sm text-gray-400">

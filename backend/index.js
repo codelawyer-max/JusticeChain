@@ -4,6 +4,8 @@ const { Server } = require('socket.io');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const multer = require('multer');
+const caseRoutes = require('./routes/caseRoutes');
+const documentRoutes = require('./routes/documentRoutes');
 require('dotenv').config();
 
 const { emitComplaintRegistered, emitComplaintUpdated } = require('./complaintTrigger');
@@ -20,7 +22,7 @@ const io = new Server(httpServer, {
   },
 });
 
-const PORT = process.env.PORT || 4000;
+const PORT = process.env.PORT || 5000;
 
 // ── Socket.IO rooms ────────────────────────────────────────────────────────
 io.on('connection', (socket) => {
@@ -82,6 +84,9 @@ app.use((req, res, next) => {
 
 app.use('/api/auth', authRoutes);
 app.use('/api', upload.array('files'), firRoutes);
+app.use('/api/cases', caseRoutes);
+app.use('/api/documents', documentRoutes);
+
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -89,14 +94,22 @@ app.use((err, req, res, next) => {
   res.status(500).json({ success: false, error: err.message });
 });
 
-mongoose.connect(MONGO_CONN)
-  .then(() => {
-    console.log('MongoDB connected');
-    httpServer.listen(PORT, () => console.log(`Server running on port ${PORT}`));
-  })
-  .catch(err => {
-    console.error('MongoDB connection error:', err && err.message ? err.message : err);
-    process.exit(1);
-  });
+const startServer = () => {
+  httpServer.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+};
+
+if (!MONGO_CONN) {
+  startServer();
+} else {
+  mongoose.connect(MONGO_CONN)
+    .then(() => {
+      console.log('MongoDB connected');
+      startServer();
+    })
+    .catch(err => {
+      console.error('MongoDB connection error:', err && err.message ? err.message : err);
+      startServer();
+    });
+}
 
 

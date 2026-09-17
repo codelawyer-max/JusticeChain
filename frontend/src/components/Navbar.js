@@ -32,6 +32,11 @@ const Navbar = () => {
       icon: "M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4",
     },
     {
+      name: "Document Workspace",
+      path: "/document-system",
+      icon: "M4 5a2 2 0 012-2h12a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm4 3h8m-8 4h8m-8 4h5",
+    },
+    {
       name: "Resources",
       path: "/resources#guides",
       icon: "M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z",
@@ -88,10 +93,10 @@ const Navbar = () => {
 
               <div>
                 <h1 className="text-2xl font-bold" style={{ color: "#0a50c2" }}>
-                  Justice Chain
+                  JusticeChain
                 </h1>
                 <p className="text-sm text-gray-600">
-                  डिजिटल एफआईआर सिस्टम | Digital FIR System
+                  डिजिटल दस्तावेज़ प्रणाली | Legal Records Portal
                 </p>
                 <p className="text-xs text-blue-800">
                   Ministry of Home Affairs, Government of India

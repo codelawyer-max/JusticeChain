@@ -18,6 +18,7 @@ import CitizenSignup from "./pages/CitizenSignup";
 import AdminSignup from "./pages/AdminSignup";
 import CitizenDashboard from "./pages/CitizenDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
+import DocumentSystemPrototype from "./pages/DocumentSystemPrototype";
 import ProtectedRoute from "./components/ProtectedRoute";
 import AuthGuard from "./components/AuthGuard";
 
@@ -31,6 +32,7 @@ function App() {
             <main className="flex-grow page-wrapper">
               <Routes>
                 <Route path="/" element={<Homepage />} />
+                <Route path="/document-system" element={<DocumentSystemPrototype />} />
                 
                 {/* Protected FIR Filing Route - Requires Citizen Login */}
                 <Route 

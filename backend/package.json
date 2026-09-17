@@ -12,6 +12,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@pinata/sdk": "^2.1.0",
     "axios": "^1.14.0",
     "bcryptjs": "^3.0.3",
     "body-parser": "^2.2.1",
@@ -20,12 +21,12 @@
     "express": "^5.2.1",
     "form-data": "^4.0.5",
     "jsonwebtoken": "^9.0.2",
+    "Justice-Chain": "file:../..",
     "mongoose": "^9.0.0",
-    "multer": "^2.0.2",
-    "nodemailer": "^8.0.1",
+    "multer": "^2.2.0",
+    "nodemailer": "^9.0.5",
     "pdf-lib": "^1.17.1",
     "pdfkit": "^0.17.2",
-    "pinata": "^2.5.1",
     "socket.io": "^4.8.1",
     "socket.io-client": "^4.8.3"
   }
