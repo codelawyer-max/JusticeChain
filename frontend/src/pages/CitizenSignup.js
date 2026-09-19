@@ -39,7 +39,7 @@ const CitizenSignup = () => {
       return 'Password must be at least 6 characters long';
     }
 
-    if (!/^\S+@\S+\.\S+$/.test(formData.email)) {
+    if (!/^\S+@\S+\.\S+$/.test(formData.email.toLowerCase())) {
       return 'Please enter a valid email address';
     }
 
@@ -64,9 +64,9 @@ const CitizenSignup = () => {
     }
 
     try {
-      const res = await axios.post('http://localhost:5000/api/auth/citizen/register', {
+      const res = await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/auth/citizen/register`, {
         fullName: formData.fullName,
-        email: formData.email,
+        email: formData.email.toLowerCase(),
         phone: formData.phone,
         password: formData.password
       });
@@ -81,7 +81,7 @@ const CitizenSignup = () => {
       }
     } catch (err) {
       console.error(err);
-      if (err.response?.status === 400 && err.response.data.message === 'Citizen already exists') {
+      if (err.response?.status === 400) {
         setError('Citizen with this email already exists.');
       } else {
         setError('Server error, please try again later.');
