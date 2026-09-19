@@ -1,4 +1,6 @@
-// AuthService.js - uses real backend (MongoDB) on port 5000
+// AuthService.js - uses real backend (MongoDB)
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
 export class AuthService {
   static CITIZEN_STORAGE_KEY = 'justice_chain_citizen_auth';
   static ADMIN_STORAGE_KEY = 'justice_chain_admin_auth';
@@ -40,7 +42,7 @@ export class AuthService {
   // ---------- CITIZEN SIGNUP ----------
   static async signupCitizen(userData) {
     try {
-      const res = await fetch('http://localhost:5000/api/auth/citizen/register', {
+      const res = await fetch(`${API_URL}/api/auth/citizen/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -64,7 +66,7 @@ export class AuthService {
   static async loginCitizen(email, password) {
     try {
       console.log('Attempting citizen login with:', email);
-      const res = await fetch('http://localhost:5000/api/auth/citizen/login', {
+      const res = await fetch(`${API_URL}/api/auth/citizen/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.toLowerCase(), password })
@@ -93,7 +95,7 @@ export class AuthService {
   // ---------- ADMIN SIGNUP ----------
   static async signupAdmin(userData) {
     try {
-      const res = await fetch('http://localhost:5000/api/auth/admin/register', {
+      const res = await fetch(`${API_URL}/api/auth/admin/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -116,7 +118,7 @@ export class AuthService {
   static async loginAdmin(email, password) {
     try {
       console.log('Attempting admin login with:', email);
-      const res = await fetch('http://localhost:5000/api/auth/admin/login', {
+      const res = await fetch(`${API_URL}/api/auth/admin/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.toLowerCase(), password })

@@ -76,9 +76,9 @@ export const AuthProvider = ({ children }) => {
     try {
       let result;
       if (userType === 'citizen') {
-        result = AuthService.signupCitizen(userData);
+        result = await AuthService.signupCitizen(userData);
       } else {
-        result = AuthService.signupAdmin(userData);
+        result = await AuthService.signupAdmin(userData);
       }
       
       return result;

@@ -66,15 +66,8 @@ router.post('/citizen/login', async (req, res) => {
                 phone: user.phone
             }
         };
-                try {
-                    const fs = require('fs');
-                    const logDir = require('path').join(__dirname, '..', 'logs');
-                    if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
-                    fs.appendFileSync(require('path').join(logDir, 'auth_tokens.log'), `CITIZEN ${new Date().toISOString()} TOKEN:${token}\n`);
-                } catch(e) {
-                    console.warn('Failed to write token log:', e.message);
-                }
         res.setHeader('Content-Type', 'application/json');
+
         return res.send(JSON.stringify(resp));
 
     } catch (err) {
