@@ -4,11 +4,11 @@
   "description": "Justice Chain - Blockchain-based FIR Management System",
   "main": "index.js",
   "scripts": {
-    "install:all": "npm install && npm --prefix JusticeChain/frontend install && npm --prefix JusticeChain/backend install && npm --prefix JusticeChain/blockchainbackend install && npm --prefix JusticeChain/zk-fabric/relayer install",
-    "dev": "concurrently \"npm --prefix JusticeChain/frontend run dev\" \"npm --prefix JusticeChain/backend start\"",
-    "dev:frontend": "npm --prefix JusticeChain/frontend run dev",
-    "dev:backend": "npm --prefix JusticeChain/backend start",
-    "build": "npm --prefix JusticeChain/frontend run build",
+    "install:all": "npm install && npm --prefix frontend install && npm --prefix backend install && npm --prefix blockchainbackend install && npm --prefix zk-fabric/relayer install",
+    "dev": "concurrently -n \"FRONTEND,BACKEND\" -c \"cyan,magenta\" \"npm --prefix frontend run dev\" \"npm --prefix backend start\"",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "dev:backend": "npm --prefix backend start",
+    "build": "npm --prefix frontend run build",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
