@@ -9,24 +9,26 @@ const {
     deleteCase
 } = require('../controllers/caseController');
 
+const { verifyToken } = require('../middleware/auth');
+
 const router = express.Router();
 
 // Create case
-router.post('/', createCase);
+router.post('/', verifyToken, createCase);
 
 // Get all cases
-router.get('/', getCases);
+router.get('/', verifyToken, getCases);
 
 // Get single case
-router.get('/:id', getCaseById);
+router.get('/:id', verifyToken, getCaseById);
 
 // Update case
-router.put('/:id', updateCase);
+router.put('/:id', verifyToken, updateCase);
 
 // Update case status
-router.patch('/:id/status', updateCaseStatus);
+router.patch('/:id/status', verifyToken, updateCaseStatus);
 
 // Delete case
-router.delete('/:id', deleteCase);
+router.delete('/:id', verifyToken, deleteCase);
 
 module.exports = router;

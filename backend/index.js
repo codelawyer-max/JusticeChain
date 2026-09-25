@@ -1,3 +1,5 @@
+require('dotenv').config();
+
 const express = require('express');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
@@ -6,7 +8,6 @@ const cors = require('cors');
 const multer = require('multer');
 const caseRoutes = require('./routes/caseRoutes');
 const documentRoutes = require('./routes/documentRoutes');
-require('dotenv').config();
 
 const { emitComplaintRegistered, emitComplaintUpdated } = require('./complaintTrigger');
 const authRoutes = require('./routes/auth');
@@ -83,9 +84,9 @@ app.use((req, res, next) => {
 });
 
 app.use('/api/auth', authRoutes);
-app.use('/api', upload.array('files'), firRoutes);
 app.use('/api/cases', caseRoutes);
 app.use('/api/documents', documentRoutes);
+app.use('/api', upload.array('files'), firRoutes);
 
 
 // Error handling middleware

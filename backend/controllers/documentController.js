@@ -97,7 +97,7 @@ const uploadDocument = async (req, res) => {
         }
 
         const uploadedByModel =
-            req.user.role === 'Admin'
+            req.user.role === 'admin'
                 ? 'Admin'
                 : 'Citizen';
 
@@ -120,7 +120,7 @@ const uploadDocument = async (req, res) => {
          */
         const fileStream = Readable.from(
             req.file.buffer
-)       ;
+        );
 
 
         /*
@@ -162,8 +162,11 @@ const uploadDocument = async (req, res) => {
         const ipfsHash =
             uploadResult.IpfsHash;
 
+        const gatewayDomain =
+            process.env.PINATA_GATEWAY || 'gateway.pinata.cloud';
+
         const ipfsUrl =
-            `https://gateway.pinata.cloud/ipfs/${ipfsHash}`;
+            `https://${gatewayDomain}/ipfs/${ipfsHash}`;
 
 
         /*
@@ -383,6 +386,119 @@ const uploadDocument = async (req, res) => {
 };
 
 
+// Get all documents (supports filtering, search, pagination)
+const getDocuments = async (req, res) => {
+    try {
+        const {
+            caseId,
+            documentType,
+            status,
+            search,
+            page = 1,
+            limit = 20
+        } = req.query;
+
+        const filter = {};
+
+        if (caseId) {
+            if (!mongoose.Types.ObjectId.isValid(caseId)) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Invalid case ID'
+                });
+            }
+            filter.case = caseId;
+        }
+
+        if (documentType) {
+            filter.documentType = documentType;
+        }
+
+        if (status) {
+            filter.status = status;
+        }
+
+        if (search) {
+            filter.$text = { $search: search };
+        }
+
+        const pageNumber = Math.max(parseInt(page, 10) || 1, 1);
+        const pageSize = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
+
+        const [documents, total] = await Promise.all([
+            Document.find(filter)
+                .sort({ createdAt: -1 })
+                .skip((pageNumber - 1) * pageSize)
+                .limit(pageSize)
+                .select('-__v'),
+            Document.countDocuments(filter)
+        ]);
+
+        return res.status(200).json({
+            success: true,
+            count: documents.length,
+            total,
+            page: pageNumber,
+            totalPages: Math.ceil(total / pageSize),
+            documents
+        });
+
+    } catch (error) {
+        console.error('Get documents error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to fetch documents',
+            error: error.message
+        });
+    }
+};
+
+
+// Get a single document by its MongoDB ID, including version history
+const getDocumentById = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid document ID'
+            });
+        }
+
+        const document = await Document.findById(id)
+            .populate('case', 'caseId title status');
+
+        if (!document) {
+            return res.status(404).json({
+                success: false,
+                message: 'Document not found'
+            });
+        }
+
+        const versions = await DocumentVersion.find({
+            document: document._id
+        }).sort({ versionNumber: -1 });
+
+        return res.status(200).json({
+            success: true,
+            document,
+            versions
+        });
+
+    } catch (error) {
+        console.error('Get document by ID error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to fetch document',
+            error: error.message
+        });
+    }
+};
+
+
 module.exports = {
-    uploadDocument
+    uploadDocument,
+    getDocuments,
+    getDocumentById
 };
