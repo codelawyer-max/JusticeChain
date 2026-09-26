@@ -2,7 +2,6 @@ const mongoose = require('mongoose');
 const { Readable } = require('stream');
 const axios = require('axios');
 const pinataSDK = require('@pinata/sdk');
-const axios = require('axios');
 
 const Document = require('../models/document');
 const DocumentVersion = require('../models/documentVersion');
@@ -21,11 +20,6 @@ const pinata = new pinataSDK(
     process.env.PINATA_API_KEY,
     process.env.PINATA_SECRET_API_KEY
 );
-
-// The separate blockchain backend service (Sepolia/ethers), runs on its own port
-const BLOCKCHAIN_BACKEND_URL =
-    process.env.BLOCKCHAIN_BACKEND_URL || 'http://localhost:3000';
-
 
 // Generate unique document ID
 const generateDocumentId = () => {
