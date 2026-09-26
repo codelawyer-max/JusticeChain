@@ -1,4 +1,5 @@
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 const express = require('express');
 const axios = require('axios');
 const { ethers } = require('ethers');
@@ -9,11 +10,11 @@ const app = express();
 app.use(cors());
 app.use(express.json()); 
 
-const PINATA_API_KEY = process.env.PINATA_API_KEY || '43871aeceb6a6714608f';
-const PINATA_SECRET_API_KEY = process.env.PINATA_SECRET_API_KEY || 'd4f0e5c82eae348ed4c4cd416a13a16b4c5ee7fbeaaecdeefa7d8f8e972280da';
-const PRIVATE_KEY = process.env.PRIVATE_KEY || 'e425cf9d9200b5ed94e7abae0aefdbe805ac43c95c32576d1236ba915a9e3498';
-const RPC_URL = process.env.RPC_URL || 'https://sepolia.infura.io/v3/542f1eaa832d48f7b99c34caca33add7';
-const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS || '0x012bE34679a1b49b67926e62D54E6073dEd59cB2';
+const PINATA_API_KEY = process.env.PINATA_API_KEY || '';
+const PINATA_SECRET_API_KEY = process.env.PINATA_SECRET_API_KEY || '';
+const PRIVATE_KEY = process.env.PRIVATE_KEY || '';
+const RPC_URL = process.env.RPC_URL || '';
+const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS || '';
 const PORT = process.env.PORT || 3000;
 
 let abi = [];
@@ -87,6 +88,7 @@ app.post('/api/uploadFIR', async (req, res) => {
 
         const firData = req.body || {};
 
+        // AI classification (fast, local — keep blocking)
         let severity = 3;
         try {
             const airesponse = await axios.post('http://localhost:5050/classify', { description: firData.incidentDescription || '' });
@@ -99,11 +101,10 @@ app.post('/api/uploadFIR', async (req, res) => {
             severity = 1;
         }
 
-        const pinataUrl = `https://api.pinata.cloud/pinning/pinJSONToIPFS`;
-
+        // Pinata upload (fast — keep blocking, already has 10s timeout)
         let ipfsHash = null;
         try {
-            const pinataResponse = await axios.post(pinataUrl, { ...firData, severity }, {
+            const pinataResponse = await axios.post('https://api.pinata.cloud/pinning/pinJSONToIPFS', { ...firData, severity }, {
                 headers: {
                     'Content-Type': 'application/json',
                     pinata_api_key: PINATA_API_KEY,
@@ -118,24 +119,6 @@ app.post('/api/uploadFIR', async (req, res) => {
             ipfsHash = firData.ipfsHash || 'ipfs_pending_' + Date.now();
         }
 
-        if (!complaintContract) {
-            return res.status(500).json({ success: false, error: 'Complaint contract not configured' });
-        }
-
-        const incidentDetailsJson = JSON.stringify(firData.incidentDetailsJson || firData || {});
-
-        const tx = await complaintContract.fileComplaint(
-            firData.incidentType || firData.title || 'Untitled FIR',
-            firData.incidentDate || new Date().toISOString().split('T')[0],
-            firData.incidentTime || new Date().toTimeString().split(' ')[0],
-            firData.incidentLocation || firData.location || 'Location not specified',
-            firData.incidentDescription || firData.description || 'No description',
-            firData.suspectDetails || 'No suspect details',
-            firData.witnessDetails || 'No witness details',
-            firData.evidenceDescription || 'No evidence description'
-        );
-        console.log("Sending to blockchain:", { firData, ipfsHash });
-
         const citizenAddress = firData.citizenAddress || firData.walletAddress || firData.toAddress;
         if (!citizenAddress) {
             return res.status(400).json({ success: false, message: 'Error uploading FIR', error: 'citizen wallet address required in payload (citizenAddress)' });
@@ -143,72 +126,58 @@ app.post('/api/uploadFIR', async (req, res) => {
 
         const metadataUri = `ipfs://${ipfsHash}`;
 
-        console.log('Preparing to send FIR to blockchain (mint or legacy create)...');
-        // Prefer mintFir if present in ABI
-        try {
-            if (contract && typeof contract.mintFir === 'function') {
-                console.log('Using contract.mintFir');
-                const tx = await contract.mintFir(
-                    citizenAddress,
-                    firData.incidentType || firData.title || 'Untitled FIR',
-                    firData.incidentDescription || firData.description || 'No description',
-                    severity,
-                    ipfsHash,
-                    metadataUri
-                );
-
-                console.log('Sending to blockchain (mint)...');
-                const receipt = await tx.wait();
-                console.log('Mint transaction mined', receipt.transactionHash);
-
-                let tokenId = null;
-                try {
-                    for (const log of receipt.logs) {
-                        try {
-                            const parsed = contract.interface.parseLog(log);
-                            if (parsed && parsed.name === 'FIRCreated') {
-                                tokenId = parsed.args && (parsed.args.id || parsed.args[0]);
-                                break;
-                            }
-                        } catch (e) {
-                            // ignore parse errors
-                        }
-                    }
-                } catch (e) {
-                    console.warn('Failed to parse FIRCreated event for tokenId:', e && e.message ? e.message : e);
-                }
-
-                return res.json({ success: true, message: 'FIR minted as NFT on blockchain', ipfsHash, txHash: receipt.transactionHash, tokenId: tokenId !== null ? tokenId.toString() : null });
-            }
-
-            // Fallback to legacy createFIR if present (older contract ABI)
-            if (contract && typeof contract.createFIR === 'function') {
-                console.log('Using contract.createFIR (legacy)');
-                const tx = await contract.createFIR(
-                    firData.incidentType || firData.title || 'Untitled FIR',
-                    firData.incidentDescription || firData.description || 'No description',
-                    severity,
-                    ipfsHash,
-                    incidentDetailsJson
-                );
-
-                console.log('Sending to blockchain (legacy createFIR)...');
-                const receipt = await tx.wait();
-                console.log('Legacy transaction mined', receipt.transactionHash);
-
-                return res.json({ success: true, message: 'FIR uploaded to blockchain (legacy contract)', ipfsHash, txHash: receipt.transactionHash });
-            }
-
-            return res.status(500).json({ success: false, message: 'Error uploading FIR', error: 'Contract ABI does not contain mintFir or createFIR methods' });
-        } catch (chainErr) {
-            console.error('Error sending FIR to chain:', chainErr && chainErr.message ? chainErr.message : chainErr);
-            return res.status(500).json({ success: false, message: 'Error uploading FIR', error: chainErr && chainErr.message ? chainErr.message : String(chainErr) });
+        if (!contract || typeof contract.mintFir !== 'function') {
+            return res.status(500).json({ success: false, message: 'Error uploading FIR', error: 'Contract ABI does not contain mintFir method' });
         }
+
+        // ── Submit mintFir transaction (DO NOT await confirmation) ──
+        console.log('Submitting mintFir transaction...');
+        const tx = await contract.mintFir(
+            citizenAddress,
+            firData.incidentType || firData.title || 'Untitled FIR',
+            firData.incidentDescription || firData.description || 'No description',
+            severity,
+            ipfsHash,
+            metadataUri
+        );
+        const txHash = tx.hash;
+        console.log('mintFir submitted, txHash:', txHash);
+
+        // Respond immediately — don't make the caller wait for block confirmation
+        res.json({ success: true, message: 'FIR submitted to blockchain (pending confirmation)', ipfsHash, txHash, tokenId: null, pending: true });
+
+        // ── Confirm in background (non-blocking) ──
+        tx.wait().then(receipt => {
+            console.log('mintFir confirmed in block:', receipt.blockNumber, 'txHash:', receipt.hash);
+
+            // Also fire fileComplaint in background after mint confirms
+            if (complaintContract && typeof complaintContract.fileComplaint === 'function') {
+                complaintContract.fileComplaint(
+                    firData.incidentType || firData.title || 'Untitled FIR',
+                    firData.incidentDate || new Date().toISOString().split('T')[0],
+                    firData.incidentTime || new Date().toTimeString().split(' ')[0],
+                    firData.incidentLocation || firData.location || 'Location not specified',
+                    firData.incidentDescription || firData.description || 'No description',
+                    firData.suspectDetails || 'No suspect details',
+                    firData.witnessDetails || 'No witness details',
+                    firData.evidenceDescription || 'No evidence description'
+                ).then(cTx => cTx.wait()).then(() => {
+                    console.log('fileComplaint confirmed on chain.');
+                }).catch(err => {
+                    console.warn('fileComplaint background error:', err && err.message ? err.message : err);
+                });
+            }
+        }).catch(err => {
+            console.error('mintFir confirmation error:', err && err.message ? err.message : err);
+        });
+
     } catch (error) {
         console.error('Error uploading FIR:', error && error.message ? error.message : error);
         return res.status(500).json({ success: false, message: 'Error uploading FIR', error: error && error.message ? error.message : String(error) });
     }
 });
+
+
 
     app.post('/api/fileComplaint', async (req, res) => {
         try {
@@ -270,19 +239,6 @@ app.post('/api/uploadFIR', async (req, res) => {
     });
 
 // ── Document anchoring ────────────────────────────────────────────────────────
-//
-// Strategy: no contract function for documents exists in the current ABI, so
-// we anchor by sending a 0-ETH self-transaction whose `data` field carries a
-// compact, hex-encoded JSON payload. The resulting txHash is permanent and
-// publicly verifiable on any Ethereum block explorer.
-//
-// Payload schema (UTF-8 → hex):
-//   { v: 1, type: "DOC_ANCHOR", docId, sha256, ipfsHash, officer, ts }
-//
-// POST /api/anchorDocument
-//   Body: { documentId, sha256Hash, ipfsHash, officerAddress? }
-//   Returns: { txHash, blockNumber, anchoredAt, payload }
-
 app.post('/api/anchorDocument', async (req, res) => {
     try {
         if (!wallet || !provider) {
@@ -301,15 +257,14 @@ app.post('/api/anchorDocument', async (req, res) => {
             });
         }
 
-        // Build a compact, deterministic anchor payload
         const anchorPayload = {
             v: 1,
             type: 'DOC_ANCHOR',
             docId:    documentId,
             sha256:   sha256Hash,
             ipfsHash: ipfsHash   || null,
-            officer:  officerAddress || wallet.address,  // default to backend wallet
-            ts:       Math.floor(Date.now() / 1000)      // unix seconds
+            officer:  officerAddress || wallet.address,
+            ts:       Math.floor(Date.now() / 1000)
         };
 
         const payloadHex = '0x' + Buffer.from(
@@ -318,7 +273,6 @@ app.post('/api/anchorDocument', async (req, res) => {
 
         console.log(`[Anchor] Anchoring document ${documentId} on-chain…`);
 
-        // 0-ETH self-transaction — gas cost only
         const tx = await wallet.sendTransaction({
             to:    wallet.address,
             value: 0n,
@@ -326,7 +280,7 @@ app.post('/api/anchorDocument', async (req, res) => {
         });
 
         console.log(`[Anchor] tx sent: ${tx.hash} — waiting for confirmation…`);
-        const receipt = await tx.wait(1);   // wait for 1 confirmation
+        const receipt = await tx.wait(1);
         console.log(`[Anchor] confirmed in block ${receipt.blockNumber}`);
 
         return res.json({
@@ -334,7 +288,7 @@ app.post('/api/anchorDocument', async (req, res) => {
             txHash:      receipt.hash,
             blockNumber: receipt.blockNumber,
             anchoredAt:  new Date().toISOString(),
-            payload:     anchorPayload      // echo back so the caller can store/verify
+            payload:     anchorPayload
         });
 
     } catch (err) {
@@ -346,7 +300,14 @@ app.post('/api/anchorDocument', async (req, res) => {
     }
 });
 
-// ── Server start ──────────────────────────────────────────────────────────────
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
     console.log(`JusticeChain Backend running on port ${PORT}`);
+});
+
+server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+        console.error(`\x1b[31m[ERROR] Port ${PORT} is already in use by another running process.\x1b[0m`);
+    } else {
+        console.error('Server error:', err);
+    }
 });

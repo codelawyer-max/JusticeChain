@@ -1,10 +1,10 @@
 from web3 import Web3
 import json
+import os
 
-
-RPC_URL = "https://sepolia.infura.io/v3/542f1eaa832d48f7b99c34caca33add7"  # <-- paste here
-CONTRACT_ADDRESS = "0x0019C4D21966f151d84633BF6347BB4ecEE936EE"                 # <-- paste here
-PRIVATE_KEY = "0xe425cf9d9200b5ed94e7abae0aefdbe805ac43c95c32576d1236ba915a9e3498"                           # <-- paste here
+RPC_URL = os.getenv("RPC_URL", "https://sepolia.infura.io/v3/your_infura_project_id")
+CONTRACT_ADDRESS = os.getenv("CONTRACT_ADDRESS", "0x0000000000000000000000000000000000000000")
+PRIVATE_KEY = os.getenv("PRIVATE_KEY", "your_private_key_here")
 
 web3 = Web3(Web3.HTTPProvider(RPC_URL))
 account = web3.eth.account.from_key(PRIVATE_KEY)
