@@ -394,6 +394,25 @@ const uploadDocument = async (req, res) => {
             error
         );
 
+        // Always attempt to audit a failed upload — logAudit is fire-and-forget
+        // and will silently swallow any write error, so this is safe even when
+        // the failure occurred before userId was extracted (e.g. missing file).
+        await logAudit({
+            action: 'DOCUMENT_UPLOADED',
+            performedBy: req.user?._id || req.user?.id || null,
+            performedByModel:
+                req.user?.role === 'admin' ? 'Admin' : 'Citizen',
+            case: req.body?.caseId || null,
+            description: `Document upload failed: ${error.message}`,
+            metadata: {
+                originalFileName: req.file?.originalname || null,
+                documentType:    req.body?.documentType  || null,
+                error:           error.message
+            },
+            req,
+            status: 'FAILED'
+        });
+
         return res.status(500).json({
             success: false,
 
@@ -522,6 +541,24 @@ const getDocumentById = async (req, res) => {
 
     } catch (error) {
         console.error('Get document by ID error:', error);
+
+        // Always attempt to audit a failed view — fire-and-forget, safe even
+        // when the error occurred before the document or viewerId were resolved.
+        await logAudit({
+            action: 'DOCUMENT_VIEWED',
+            performedBy: req.user?._id || req.user?.id || null,
+            performedByModel:
+                req.user?.role === 'admin' ? 'Admin' : 'Citizen',
+            description:
+                `Document view failed for id=${req.params?.id ?? 'unknown'}: ${error.message}`,
+            metadata: {
+                documentId: req.params?.id || null,
+                error:      error.message
+            },
+            req,
+            status: 'FAILED'
+        });
+
         return res.status(500).json({
             success: false,
             message: 'Failed to fetch document',
