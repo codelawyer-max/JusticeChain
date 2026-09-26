@@ -269,6 +269,84 @@ app.post('/api/uploadFIR', async (req, res) => {
         }
     });
 
+// ── Document anchoring ────────────────────────────────────────────────────────
+//
+// Strategy: no contract function for documents exists in the current ABI, so
+// we anchor by sending a 0-ETH self-transaction whose `data` field carries a
+// compact, hex-encoded JSON payload. The resulting txHash is permanent and
+// publicly verifiable on any Ethereum block explorer.
+//
+// Payload schema (UTF-8 → hex):
+//   { v: 1, type: "DOC_ANCHOR", docId, sha256, ipfsHash, officer, ts }
+//
+// POST /api/anchorDocument
+//   Body: { documentId, sha256Hash, ipfsHash, officerAddress? }
+//   Returns: { txHash, blockNumber, anchoredAt, payload }
+
+app.post('/api/anchorDocument', async (req, res) => {
+    try {
+        if (!wallet || !provider) {
+            return res.status(503).json({
+                success: false,
+                error: 'Blockchain wallet not configured — check PRIVATE_KEY and RPC_URL'
+            });
+        }
+
+        const { documentId, sha256Hash, ipfsHash, officerAddress } = req.body || {};
+
+        if (!documentId || !sha256Hash) {
+            return res.status(400).json({
+                success: false,
+                error: 'documentId and sha256Hash are required'
+            });
+        }
+
+        // Build a compact, deterministic anchor payload
+        const anchorPayload = {
+            v: 1,
+            type: 'DOC_ANCHOR',
+            docId:    documentId,
+            sha256:   sha256Hash,
+            ipfsHash: ipfsHash   || null,
+            officer:  officerAddress || wallet.address,  // default to backend wallet
+            ts:       Math.floor(Date.now() / 1000)      // unix seconds
+        };
+
+        const payloadHex = '0x' + Buffer.from(
+            JSON.stringify(anchorPayload), 'utf8'
+        ).toString('hex');
+
+        console.log(`[Anchor] Anchoring document ${documentId} on-chain…`);
+
+        // 0-ETH self-transaction — gas cost only
+        const tx = await wallet.sendTransaction({
+            to:    wallet.address,
+            value: 0n,
+            data:  payloadHex
+        });
+
+        console.log(`[Anchor] tx sent: ${tx.hash} — waiting for confirmation…`);
+        const receipt = await tx.wait(1);   // wait for 1 confirmation
+        console.log(`[Anchor] confirmed in block ${receipt.blockNumber}`);
+
+        return res.json({
+            success:     true,
+            txHash:      receipt.hash,
+            blockNumber: receipt.blockNumber,
+            anchoredAt:  new Date().toISOString(),
+            payload:     anchorPayload      // echo back so the caller can store/verify
+        });
+
+    } catch (err) {
+        console.error('[Anchor] anchorDocument error:', err && err.message ? err.message : err);
+        return res.status(500).json({
+            success: false,
+            error:   err && err.message ? err.message : String(err)
+        });
+    }
+});
+
+// ── Server start ──────────────────────────────────────────────────────────────
 app.listen(PORT, () => {
     console.log(`JusticeChain Backend running on port ${PORT}`);
 });

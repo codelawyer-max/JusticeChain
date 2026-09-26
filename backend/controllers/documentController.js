@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const { Readable } = require('stream');
+const axios = require('axios');
 const pinataSDK = require('@pinata/sdk');
 
 const Document = require('../models/document');
@@ -8,6 +9,11 @@ const Case = require('../models/case');
 
 const { calculateSHA256 } = require('../utils/documentHash');
 const { logAudit } = require('../utils/auditLogger');
+
+// URL of the blockchain sidecar — override via env if ports differ
+const BLOCKCHAIN_BACKEND_URL =
+    process.env.BLOCKCHAIN_BACKEND_URL || 'http://localhost:3000';
+
 
 // Initialize Pinata using environment variables
 const pinata = new pinataSDK(
@@ -568,8 +574,166 @@ const getDocumentById = async (req, res) => {
 };
 
 
+// Anchor a document's SHA-256 hash on-chain via the blockchain sidecar.
+//
+// Flow:
+//   1. Load the document and verify it hasn't been anchored already.
+//   2. POST to the blockchain backend's /api/anchorDocument with the hash +
+//      IPFS hash. The sidecar sends a 0-ETH self-transaction whose `data`
+//      field encodes the payload; returns a txHash once the tx is confirmed.
+//   3. Patch Document.integrity with the txHash, set blockchainVerified = true.
+//   4. Write a BLOCKCHAIN_REGISTERED audit entry.
+//
+// POST /api/documents/:id/anchor
+const anchorDocument = async (req, res) => {
+    const actorId    = req.user?._id || req.user?.id || null;
+    const actorModel = req.user?.role === 'admin' ? 'Admin' : 'Citizen';
+
+    try {
+        const { id } = req.params;
+
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid document ID'
+            });
+        }
+
+        const document = await Document.findById(id);
+
+        if (!document) {
+            return res.status(404).json({
+                success: false,
+                message: 'Document not found'
+            });
+        }
+
+        // Guard: already anchored — return the existing record rather than
+        // spending gas on a duplicate transaction.
+        if (document.integrity?.blockchainVerified && document.integrity?.blockchainTxHash) {
+            return res.status(409).json({
+                success:  false,
+                message:  'Document is already anchored on-chain',
+                txHash:   document.integrity.blockchainTxHash,
+                anchoredAt: document.integrity.lastVerifiedAt
+            });
+        }
+
+        const sha256Hash = document.integrity?.sha256Hash;
+
+        if (!sha256Hash) {
+            return res.status(422).json({
+                success: false,
+                message: 'Document has no SHA-256 hash — cannot anchor'
+            });
+        }
+
+        // ── Call the blockchain sidecar ──────────────────────────────────────
+        let chainResult;
+        try {
+            const response = await axios.post(
+                `${BLOCKCHAIN_BACKEND_URL}/api/anchorDocument`,
+                {
+                    documentId:     document.documentId,
+                    sha256Hash,
+                    ipfsHash:       document.storage?.ipfsHash || null,
+                    officerAddress: req.body?.officerAddress || null
+                },
+                { timeout: 120_000 }   // Sepolia can be slow — 2-minute ceiling
+            );
+            chainResult = response.data;
+        } catch (chainErr) {
+            const errMsg = chainErr.response?.data?.error
+                || chainErr.message
+                || String(chainErr);
+
+            await logAudit({
+                action:          'BLOCKCHAIN_REGISTERED',
+                performedBy:     actorId,
+                performedByModel: actorModel,
+                case:            document.case  || null,
+                document:        document._id,
+                description:     `Blockchain anchoring FAILED for "${document.title}": ${errMsg}`,
+                metadata:        { sha256Hash, error: errMsg },
+                req,
+                status:          'FAILED'
+            });
+
+            return res.status(502).json({
+                success: false,
+                message: 'Blockchain sidecar error',
+                error:   errMsg
+            });
+        }
+
+        // ── Patch the Document integrity fields ──────────────────────────────
+        document.integrity.blockchainTxHash   = chainResult.txHash;
+        document.integrity.blockchainVerified = true;
+        document.integrity.lastVerifiedAt     = new Date(chainResult.anchoredAt);
+        await document.save();
+
+        // ── Audit trail ──────────────────────────────────────────────────────
+        await logAudit({
+            action:           'BLOCKCHAIN_REGISTERED',
+            performedBy:      actorId,
+            performedByModel: actorModel,
+            case:             document.case  || null,
+            document:         document._id,
+            description:      `Document "${document.title}" (${document.documentId}) anchored on-chain`,
+            metadata: {
+                sha256Hash,
+                txHash:      chainResult.txHash,
+                blockNumber: chainResult.blockNumber,
+                ipfsHash:    document.storage?.ipfsHash || null,
+                officer:     chainResult.payload?.officer || null
+            },
+            req,
+            status: 'SUCCESS'
+        });
+
+        return res.status(200).json({
+            success:    true,
+            message:    'Document anchored on-chain',
+            document: {
+                id:         document._id,
+                documentId: document.documentId,
+                title:      document.title
+            },
+            integrity: {
+                sha256Hash,
+                blockchainTxHash:   chainResult.txHash,
+                blockchainVerified: true,
+                lastVerifiedAt:     chainResult.anchoredAt,
+                blockNumber:        chainResult.blockNumber
+            }
+        });
+
+    } catch (error) {
+        console.error('Anchor document error:', error);
+
+        await logAudit({
+            action:           'BLOCKCHAIN_REGISTERED',
+            performedBy:      actorId,
+            performedByModel: actorModel,
+            document:         req.params?.id || null,
+            description:      `Blockchain anchoring error for id=${req.params?.id}: ${error.message}`,
+            metadata:         { error: error.message },
+            req,
+            status:           'FAILED'
+        });
+
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to anchor document',
+            error:   error.message
+        });
+    }
+};
+
+
 module.exports = {
     uploadDocument,
     getDocuments,
-    getDocumentById
+    getDocumentById,
+    anchorDocument
 };
