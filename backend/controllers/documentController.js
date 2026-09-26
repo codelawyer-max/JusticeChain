@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const { Readable } = require('stream');
 const axios = require('axios');
 const pinataSDK = require('@pinata/sdk');
+const axios = require('axios');
 
 const Document = require('../models/document');
 const DocumentVersion = require('../models/documentVersion');
@@ -20,6 +21,10 @@ const pinata = new pinataSDK(
     process.env.PINATA_API_KEY,
     process.env.PINATA_SECRET_API_KEY
 );
+
+// The separate blockchain backend service (Sepolia/ethers), runs on its own port
+const BLOCKCHAIN_BACKEND_URL =
+    process.env.BLOCKCHAIN_BACKEND_URL || 'http://localhost:3000';
 
 
 // Generate unique document ID
@@ -340,6 +345,63 @@ const uploadDocument = async (req, res) => {
         });
 
 
+        /*
+         * 13.6 Anchor document hash on blockchain (non-blocking)
+         *
+         * If this fails (network hiccup, RPC issue, etc.), the
+         * upload itself still succeeds. blockchainVerified simply
+         * stays false until this succeeds on a retry, or is done
+         * manually later. Anchoring is an enhancement layer on top
+         * of the core upload, not a hard dependency for it.
+         */
+        let blockchainTxHash = null;
+        let blockchainVerified = false;
+
+        try {
+            const anchorResponse = await axios.post(
+                `${BLOCKCHAIN_BACKEND_URL}/api/anchorDocument`,
+                {
+                    documentId: document.documentId,
+                    sha256Hash,
+                    ipfsHash
+                },
+                { timeout: 30000 }
+            );
+
+            if (anchorResponse.data && anchorResponse.data.success) {
+                blockchainTxHash = anchorResponse.data.txHash;
+                blockchainVerified = true;
+
+                await Document.findByIdAndUpdate(document._id, {
+                    'integrity.blockchainTxHash': blockchainTxHash,
+                    'integrity.blockchainVerified': true,
+                    'integrity.lastVerifiedAt': new Date()
+                });
+
+                await DocumentVersion.findByIdAndUpdate(documentVersion._id, {
+                    'integrity.blockchainTxHash': blockchainTxHash,
+                    'integrity.blockchainVerified': true
+                });
+
+                await logAudit({
+                    action: 'BLOCKCHAIN_REGISTERED',
+                    performedBy: userId,
+                    performedByModel: uploadedByModel,
+                    case: caseId,
+                    document: document._id,
+                    documentVersion: documentVersion._id,
+                    description: `Document "${title}" (${document.documentId}) hash anchored on blockchain`,
+                    metadata: { txHash: blockchainTxHash },
+                    req
+                });
+            }
+        } catch (chainError) {
+            console.warn(
+                'Blockchain anchoring failed (document upload still succeeded):',
+                chainError.message
+            );
+        }
+
 
         /*
          * 14. Return response
@@ -388,8 +450,9 @@ const uploadDocument = async (req, res) => {
             integrity: {
                 sha256Hash,
 
-                blockchainVerified:
-                    false
+                blockchainVerified,
+
+                blockchainTxHash
             }
         });
 

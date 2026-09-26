@@ -8,7 +8,7 @@ const cors = require('cors');
 
 const app = express();
 app.use(cors());
-app.use(express.json()); 
+app.use(express.json());
 
 const PINATA_API_KEY = process.env.PINATA_API_KEY || '';
 const PINATA_SECRET_API_KEY = process.env.PINATA_SECRET_API_KEY || '';
@@ -32,10 +32,20 @@ try {
     console.warn('ComplaintABI.json not found or invalid - complaint features will be disabled until ABI is provided.');
 }
 
+// Document registry contract config (new)
+const DOCUMENT_CONTRACT_ADDRESS = process.env.DOCUMENT_CONTRACT_ADDRESS || '';
+let documentAbi = [];
+try {
+    documentAbi = JSON.parse(fs.readFileSync('./DocumentRegistryABI.json', 'utf8'));
+} catch (e) {
+    console.warn('DocumentRegistryABI.json not found or invalid - document anchoring will be disabled until ABI is provided.');
+}
+
 let provider = null;
 let wallet = null;
 let contract = null;
 let complaintContract = null;
+let documentContract = null; // new
 
 // Initialize provider / wallet / contracts with defensive error handling so the server can still start
 try {
@@ -55,6 +65,13 @@ try {
     } else {
         console.log('Complaint contract not initialized (ABI or address missing).');
     }
+
+    if (DOCUMENT_CONTRACT_ADDRESS && documentAbi && documentAbi.length > 0) {
+        documentContract = new ethers.Contract(DOCUMENT_CONTRACT_ADDRESS, documentAbi, wallet);
+        console.log('DocumentRegistry contract initialized at', DOCUMENT_CONTRACT_ADDRESS);
+    } else {
+        console.warn('DocumentRegistry contract not initialized (ABI or address missing).');
+    }
 } catch (initErr) {
     console.error('Error initializing blockchain provider/wallet/contracts:', initErr && initErr.message ? initErr.message : initErr);
     // Keep contract variables null and allow the HTTP server to start so health checks and actionable errors work.
@@ -66,7 +83,14 @@ app.get('/', (req, res) => {
 
 // Health check endpoint: returns server + provider status
 app.get('/health', async (req, res) => {
-    const status = { server: true, port: PORT, provider: null, contractLoaded: !!contract, complaintContractLoaded: !!complaintContract };
+    const status = {
+        server: true,
+        port: PORT,
+        provider: null,
+        contractLoaded: !!contract,
+        complaintContractLoaded: !!complaintContract,
+        documentContractLoaded: !!documentContract
+    };
     if (provider) {
         try {
             // quick provider check
@@ -80,6 +104,92 @@ app.get('/health', async (req, res) => {
     }
 
     return res.json({ success: true, status });
+});
+
+// Anchor a document's hash on-chain (new)
+app.post('/api/anchorDocument', async (req, res) => {
+    try {
+        const { documentId, sha256Hash, ipfsHash } = req.body || {};
+
+        if (!documentId || !sha256Hash) {
+            return res.status(400).json({
+                success: false,
+                error: 'documentId and sha256Hash are required'
+            });
+        }
+
+        if (!documentContract) {
+            return res.status(500).json({
+                success: false,
+                error: 'DocumentRegistry contract not configured on backend'
+            });
+        }
+
+        console.log('Anchoring document on-chain:', documentId);
+
+        const tx = await documentContract.anchorDocument(
+            documentId,
+            sha256Hash,
+            ipfsHash || ''
+        );
+
+        const receipt = await tx.wait();
+        console.log('anchorDocument tx mined:', receipt.hash);
+
+        return res.json({
+            success: true,
+            message: 'Document anchored on blockchain',
+            txHash: receipt.hash
+        });
+
+    } catch (err) {
+        console.error('Error anchoring document on chain:', err && err.message ? err.message : err);
+        return res.status(500).json({
+            success: false,
+            error: err && err.message ? err.message : String(err)
+        });
+    }
+});
+
+// Look up an anchored document's on-chain record (new)
+app.get('/api/verifyDocument/:documentId', async (req, res) => {
+    try {
+        const { documentId } = req.params;
+
+        if (!documentContract) {
+            return res.status(500).json({
+                success: false,
+                error: 'DocumentRegistry contract not configured on backend'
+            });
+        }
+
+        const isAnchored = await documentContract.isAnchored(documentId);
+
+        if (!isAnchored) {
+            return res.status(404).json({
+                success: false,
+                message: 'Document not found on-chain'
+            });
+        }
+
+        const result = await documentContract.getDocument(documentId);
+
+        return res.json({
+            success: true,
+            documentId,
+            sha256Hash: result.sha256Hash,
+            ipfsHash: result.ipfsHash,
+            anchoredBy: result.anchoredBy,
+            timestamp: result.timestamp.toString()
+        });
+
+    } catch (err) {
+        console.error('Error verifying document on chain:', err && err.message ? err.message : err);
+        return res.status(500).json({
+            success: false,
+            error: err && err.message ? err.message : String(err)
+        });
+    }
 });
 
 app.post('/api/uploadFIR', async (req, res) => {
@@ -177,66 +287,64 @@ app.post('/api/uploadFIR', async (req, res) => {
     }
 });
 
-
-
-    app.post('/api/fileComplaint', async (req, res) => {
-        try {
-            if (!complaintContract) {
-                return res.status(500).json({ success: false, error: 'Complaint contract not configured' });
-            }
-
-            const data = req.body || {};
-
-            const incidentType = data.incidentType || '';
-            const incidentDate = data.incidentDate || '';
-            const incidentTime = data.incidentTime || '';
-            const incidentLocation = data.incidentLocation || data.location || '';
-            const incidentDescription = data.incidentDescription || data.description || '';
-            const suspectDetails = data.suspectDetails || '';
-            const witnessDetails = data.witnessDetails || '';
-            const evidenceDescription = data.evidenceDescription || '';
-
-            const tx = await complaintContract.fileComplaint(
-                incidentType,
-                incidentDate,
-                incidentTime,
-                incidentLocation,
-                incidentDescription,
-                suspectDetails,
-                witnessDetails,
-                evidenceDescription
-            );
-
-            await tx.wait();
-
-            return res.json({ success: true, message: 'Complaint filed on chain', txHash: tx.hash });
-        } catch (err) {
-            console.error('Error filing complaint on chain:', err && err.message ? err.message : err);
-            return res.status(500).json({ success: false, error: err && err.message ? err.message : String(err) });
+app.post('/api/fileComplaint', async (req, res) => {
+    try {
+        if (!complaintContract) {
+            return res.status(500).json({ success: false, error: 'Complaint contract not configured' });
         }
-    });
 
-    // Close (burn) an existing FIR NFT by tokenId (only backend wallet/police allowed)
-    app.post('/api/closeFIR', async (req, res) => {
-        try {
-            const { tokenId } = req.body || {};
-            if (!tokenId) return res.status(400).json({ success: false, error: 'tokenId required' });
+        const data = req.body || {};
 
-            if (!contract) {
-                return res.status(500).json({ success: false, error: 'JusticeChain contract not configured on backend' });
-            }
+        const incidentType = data.incidentType || '';
+        const incidentDate = data.incidentDate || '';
+        const incidentTime = data.incidentTime || '';
+        const incidentLocation = data.incidentLocation || data.location || '';
+        const incidentDescription = data.incidentDescription || data.description || '';
+        const suspectDetails = data.suspectDetails || '';
+        const witnessDetails = data.witnessDetails || '';
+        const evidenceDescription = data.evidenceDescription || '';
 
-            console.log('Closing FIR tokenId:', tokenId);
-            const tx = await contract.closeFir(tokenId);
-            const receipt = await tx.wait();
-            console.log('closeFir tx mined:', receipt.transactionHash);
+        const tx = await complaintContract.fileComplaint(
+            incidentType,
+            incidentDate,
+            incidentTime,
+            incidentLocation,
+            incidentDescription,
+            suspectDetails,
+            witnessDetails,
+            evidenceDescription
+        );
 
-            return res.json({ success: true, message: 'FIR closed (burned)', txHash: receipt.transactionHash });
-        } catch (err) {
-            console.error('Error closing FIR on chain:', err && err.message ? err.message : err);
-            return res.status(500).json({ success: false, error: err && err.message ? err.message : String(err) });
+        await tx.wait();
+
+        return res.json({ success: true, message: 'Complaint filed on chain', txHash: tx.hash });
+    } catch (err) {
+        console.error('Error filing complaint on chain:', err && err.message ? err.message : err);
+        return res.status(500).json({ success: false, error: err && err.message ? err.message : String(err) });
+    }
+});
+
+// Close (burn) an existing FIR NFT by tokenId (only backend wallet/police allowed)
+app.post('/api/closeFIR', async (req, res) => {
+    try {
+        const { tokenId } = req.body || {};
+        if (!tokenId) return res.status(400).json({ success: false, error: 'tokenId required' });
+
+        if (!contract) {
+            return res.status(500).json({ success: false, error: 'JusticeChain contract not configured on backend' });
         }
-    });
+
+        console.log('Closing FIR tokenId:', tokenId);
+        const tx = await contract.closeFir(tokenId);
+        const receipt = await tx.wait();
+        console.log('closeFir tx mined:', receipt.transactionHash);
+
+        return res.json({ success: true, message: 'FIR closed (burned)', txHash: receipt.transactionHash });
+    } catch (err) {
+        console.error('Error closing FIR on chain:', err && err.message ? err.message : err);
+        return res.status(500).json({ success: false, error: err && err.message ? err.message : String(err) });
+    }
+});
 
 // ── Document anchoring ────────────────────────────────────────────────────────
 app.post('/api/anchorDocument', async (req, res) => {

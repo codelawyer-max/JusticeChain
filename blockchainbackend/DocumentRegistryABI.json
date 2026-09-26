@@ -1,0 +1,133 @@
+[
+	{
+		"inputs": [
+			{
+				"internalType": "string",
+				"name": "documentId",
+				"type": "string"
+			},
+			{
+				"internalType": "string",
+				"name": "sha256Hash",
+				"type": "string"
+			},
+			{
+				"internalType": "string",
+				"name": "ipfsHash",
+				"type": "string"
+			}
+		],
+		"name": "anchorDocument",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"stateMutability": "nonpayable",
+		"type": "constructor"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "string",
+				"name": "documentId",
+				"type": "string"
+			},
+			{
+				"indexed": false,
+				"internalType": "string",
+				"name": "sha256Hash",
+				"type": "string"
+			},
+			{
+				"indexed": false,
+				"internalType": "string",
+				"name": "ipfsHash",
+				"type": "string"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "anchoredBy",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "timestamp",
+				"type": "uint256"
+			}
+		],
+		"name": "DocumentAnchored",
+		"type": "event"
+	},
+	{
+		"inputs": [],
+		"name": "admin",
+		"outputs": [
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "string",
+				"name": "documentId",
+				"type": "string"
+			}
+		],
+		"name": "getDocument",
+		"outputs": [
+			{
+				"internalType": "string",
+				"name": "sha256Hash",
+				"type": "string"
+			},
+			{
+				"internalType": "string",
+				"name": "ipfsHash",
+				"type": "string"
+			},
+			{
+				"internalType": "address",
+				"name": "anchoredBy",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "timestamp",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "string",
+				"name": "documentId",
+				"type": "string"
+			}
+		],
+		"name": "isAnchored",
+		"outputs": [
+			{
+				"internalType": "bool",
+				"name": "",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	}
+]
