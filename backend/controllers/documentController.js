@@ -7,6 +7,7 @@ const DocumentVersion = require('../models/documentVersion');
 const Case = require('../models/case');
 
 const { calculateSHA256 } = require('../utils/documentHash');
+const { logAudit } = require('../utils/auditLogger');
 
 // Initialize Pinata using environment variables
 const pinata = new pinataSDK(
@@ -313,6 +314,26 @@ const uploadDocument = async (req, res) => {
                 isCurrent: true
             });
 
+        /*
+    * 13.5 Record audit trail entry
+    */
+        await logAudit({
+            action: 'DOCUMENT_UPLOADED',
+            performedBy: userId,
+            performedByModel: uploadedByModel,
+            case: caseId,
+            document: document._id,
+            documentVersion: documentVersion._id,
+            description: `Document "${title}" (${documentType}) uploaded to case ${existingCase.caseId}`,
+            metadata: {
+                documentType,
+                fileSize: req.file.size,
+                ipfsHash
+            },
+            req
+        });
+
+
 
         /*
          * 14. Return response
@@ -479,6 +500,19 @@ const getDocumentById = async (req, res) => {
         const versions = await DocumentVersion.find({
             document: document._id
         }).sort({ versionNumber: -1 });
+
+        const viewerId = req.user?._id || req.user?.id;
+        const viewerModel = req.user?.role === 'admin' ? 'Admin' : 'Citizen';
+
+        await logAudit({
+            action: 'DOCUMENT_VIEWED',
+            performedBy: viewerId,
+            performedByModel: viewerModel,
+            case: document.case?._id || document.case,
+            document: document._id,
+            description: `Document "${document.title}" (${document.documentId}) viewed`,
+            req
+        });
 
         return res.status(200).json({
             success: true,

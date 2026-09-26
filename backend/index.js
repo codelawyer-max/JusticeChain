@@ -8,6 +8,7 @@ const cors = require('cors');
 const multer = require('multer');
 const caseRoutes = require('./routes/caseRoutes');
 const documentRoutes = require('./routes/documentRoutes');
+const auditLogRoutes = require('./routes/auditLogRoutes');
 
 const { emitComplaintRegistered, emitComplaintUpdated } = require('./complaintTrigger');
 const authRoutes = require('./routes/auth');
@@ -86,6 +87,7 @@ app.use((req, res, next) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/cases', caseRoutes);
 app.use('/api/documents', documentRoutes);
+app.use('/api/audit-logs', auditLogRoutes);
 app.use('/api', upload.array('files'), firRoutes);
 
 

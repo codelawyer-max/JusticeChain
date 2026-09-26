@@ -1,4 +1,5 @@
 const Case = require('../models/case');
+const { logAudit } = require('../utils/auditLogger');
 
 // Generate unique Case ID
 const generateCaseId = () => {
@@ -47,7 +48,7 @@ const createCase = async (req, res) => {
         }
 
         const createdByModel =
-            req.user.role === 'Admin'
+            req.user.role === 'admin'
                 ? 'Admin'
                 : 'Citizen';
 
@@ -64,6 +65,16 @@ const createCase = async (req, res) => {
                 confidentialityLevel || 'Confidential',
             createdBy: userId,
             createdByModel
+        });
+
+        await logAudit({
+            action: 'CASE_CREATED',
+            performedBy: userId,
+            performedByModel: createdByModel,
+            case: newCase._id,
+            description: `Case "${title}" (${caseId}) created`,
+            metadata: { caseType, priority: newCase.priority },
+            req
         });
 
         return res.status(201).json({
@@ -204,6 +215,19 @@ const updateCase = async (req, res) => {
             });
         }
 
+        const userId = req.user?._id || req.user?.id;
+        const performedByModel = req.user?.role === 'admin' ? 'Admin' : 'Citizen';
+
+        await logAudit({
+            action: 'CASE_UPDATED',
+            performedBy: userId,
+            performedByModel,
+            case: updatedCase._id,
+            description: `Case "${updatedCase.title}" (${updatedCase.caseId}) updated`,
+            metadata: { updatedFields: Object.keys(updates) },
+            req
+        });
+
         return res.status(200).json({
             success: true,
             message: 'Case updated successfully',
@@ -269,6 +293,19 @@ const updateCaseStatus = async (req, res) => {
             });
         }
 
+        const userId = req.user?._id || req.user?.id;
+        const performedByModel = req.user?.role === 'admin' ? 'Admin' : 'Citizen';
+
+        await logAudit({
+            action: status === 'Closed' ? 'CASE_CLOSED' : 'CASE_UPDATED',
+            performedBy: userId,
+            performedByModel,
+            case: updatedCase._id,
+            description: `Case "${updatedCase.title}" (${updatedCase.caseId}) status changed to "${status}"`,
+            metadata: { newStatus: status },
+            req
+        });
+
         return res.status(200).json({
             success: true,
             message: 'Case status updated successfully',
@@ -300,6 +337,18 @@ const deleteCase = async (req, res) => {
         }
 
         await Case.findByIdAndDelete(req.params.id);
+
+        const userId = req.user?._id || req.user?.id;
+        const performedByModel = req.user?.role === 'admin' ? 'Admin' : 'Citizen';
+
+        await logAudit({
+            action: 'OTHER',
+            performedBy: userId,
+            performedByModel,
+            description: `Case "${caseData.title}" (${caseData.caseId}) deleted`,
+            metadata: { deletedCaseId: caseData.caseId },
+            req
+        });
 
         return res.status(200).json({
             success: true,
