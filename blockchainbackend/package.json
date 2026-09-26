@@ -1,4 +1,11 @@
 {
+  "name": "justicechain-blockchain-backend",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node index.js"
+  },
   "dependencies": {
     "axios": "^1.13.2",
     "bcryptjs": "^3.0.3",
