@@ -403,7 +403,7 @@ router.post('/publicSearch', async (req, res) => {
     }
 });
 
-router.post('/searchFIR', verifyToken, async (req, res) => {
+router.post('/searchFIR', verifyToken, isAdmin, async (req, res) => {
     try {
         const { searchType, searchValue } = req.body;
 
@@ -461,6 +461,11 @@ router.get('/getFIR/:id', verifyToken, async (req, res) => {
 
         if (!fir) {
             return res.status(404).json({ success: false, error: 'FIR not found' });
+        }
+
+        // Citizens may only view FIRs they filed; admins see all
+        if (req.user.role === 'citizen' && req.user.email !== fir.email) {
+            return res.status(403).json({ success: false, error: 'Unauthorized' });
         }
 
         return res.json({ success: true, fir });
@@ -642,6 +647,11 @@ router.get('/downloadFIR/:id', verifyToken, async (req, res) => {
         const fir = await FIR.findById(id).lean();
         if (!fir) return res.status(404).json({ success: false, error: 'FIR not found' });
 
+        // Citizens may only download their own FIR PDF; admins see all
+        if (req.user.role === 'citizen' && req.user.email !== fir.email) {
+            return res.status(403).json({ success: false, error: 'Unauthorized' });
+        }
+
         const pdfFile = path.join(__dirname, '..', 'fir_pdfs', `fir_${fir._id}.pdf`);
         
         // If PDF doesn't exist, generate it on-demand
@@ -778,6 +788,11 @@ router.get('/downloadComplaint/:id', verifyToken, async (req, res) => {
         const id = req.params.id;
         const fir = await FIR.findById(id).lean();
         if (!fir) return res.status(404).json({ success: false, error: 'FIR not found' });
+
+        // Citizens may only download their own complaint PDF; admins see all
+        if (req.user.role === 'citizen' && req.user.email !== fir.email) {
+            return res.status(403).json({ success: false, error: 'Unauthorized' });
+        }
 
         const pdfFile = path.join(__dirname, '..', 'fir_pdfs', `complaint_${fir._id}.pdf`);
 
