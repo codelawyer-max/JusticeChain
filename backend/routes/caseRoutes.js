@@ -16,11 +16,11 @@ const router = express.Router();
 // Create case
 router.post('/', verifyToken, createCase);
 
-// Get all cases
-router.get('/', verifyToken, getCases);
+// Get all cases — admin only (case-assignment scoping deferred to Phase 3)
+router.get('/', verifyToken, isAdmin, getCases);
 
-// Get single case
-router.get('/:id', verifyToken, getCaseById);
+// Get single case — admin only
+router.get('/:id', verifyToken, isAdmin, getCaseById);
 
 // Update case — admin only
 router.put('/:id', verifyToken, isAdmin, updateCase);
