@@ -20,3 +20,6 @@ __pycache__/
 # Lockfiles (optional)
 package-lock.json
 yarn.lock
+
+# Generated PDFs
+backend/fir_pdfs/

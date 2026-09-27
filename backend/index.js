@@ -9,6 +9,7 @@ const multer = require('multer');
 const caseRoutes = require('./routes/caseRoutes');
 const documentRoutes = require('./routes/documentRoutes');
 const auditLogRoutes = require('./routes/auditLogRoutes');
+const permissionRoutes = require('./routes/permissionRoutes');
 
 const { emitComplaintRegistered, emitComplaintUpdated } = require('./complaintTrigger');
 const authRoutes = require('./routes/auth');
@@ -88,6 +89,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/cases', caseRoutes);
 app.use('/api/documents', documentRoutes);
 app.use('/api/audit-logs', auditLogRoutes);
+app.use('/api/permissions', permissionRoutes);
 app.use('/api', upload.array('files'), firRoutes);
 
 

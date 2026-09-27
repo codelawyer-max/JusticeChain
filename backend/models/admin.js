@@ -8,6 +8,18 @@ const adminSchema = new mongoose.Schema({
     empId: { type: String, required: false },
     department: { type: String, required: false },
     designation: { type: String, required: false },
+    officerRole: {
+        type: String,
+        enum: [
+            'SUPER_ADMIN',
+            'INVESTIGATING_OFFICER',
+            'STATION_HOUSE_OFFICER',
+            'PUBLIC_PROSECUTOR',
+            'FORENSIC_ANALYST',
+            'COURT_REGISTRAR'
+        ],
+        required: true
+    },
     officeAddress: { type: String, required: false },
     state: { 
         type: String, 

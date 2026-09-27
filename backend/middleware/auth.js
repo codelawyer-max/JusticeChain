@@ -33,4 +33,62 @@ const isAdmin = (req, res, next) => {
     next();
 };
 
-module.exports = { verifyToken, isCitizen, isAdmin };
+// Middleware factory — restricts to specific officer roles.
+// SUPER_ADMIN always passes (they're the platform owner).
+// Must be used after verifyToken + isAdmin.
+//
+// Usage: requireOfficerRole('INVESTIGATING_OFFICER', 'STATION_HOUSE_OFFICER')
+const requireOfficerRole = (...roles) => async (req, res, next) => {
+    let officerRole = req.user?.officerRole;
+
+    // Resilient fallback for legacy admin tokens without officerRole in payload
+    if (!officerRole && req.user?.role === 'admin') {
+        try {
+            const Admin = require('../models/admin');
+            const admin = await Admin.findOne({ email: req.user.email }).select('officerRole');
+            officerRole = admin?.officerRole || 'SUPER_ADMIN';
+            if (req.user) req.user.officerRole = officerRole;
+        } catch (e) {
+            officerRole = 'SUPER_ADMIN';
+            if (req.user) req.user.officerRole = officerRole;
+        }
+    }
+
+    // SUPER_ADMIN bypasses every role gate
+    if (officerRole === 'SUPER_ADMIN') return next();
+
+    if (!officerRole || !roles.includes(officerRole)) {
+        return res.status(403).json({
+            message: `Access denied. Required role(s): ${roles.join(', ')}`,
+            yourRole: officerRole || 'none'
+        });
+    }
+    next();
+};
+
+// Middleware factory — restricts to specific departments (free-text match
+// against the 'department' field stored in the JWT).
+// Must be used after verifyToken + isAdmin.
+//
+// Usage: requireDepartment('Forensics', 'Police')
+const requireDepartment = (...departments) => async (req, res, next) => {
+    let officerRole = req.user?.officerRole;
+    if (!officerRole && req.user?.role === 'admin') {
+        officerRole = 'SUPER_ADMIN';
+        if (req.user) req.user.officerRole = officerRole;
+    }
+
+    // SUPER_ADMIN bypasses department gates too
+    if (officerRole === 'SUPER_ADMIN') return next();
+
+    const dept = req.user?.department;
+    if (!dept || !departments.includes(dept)) {
+        return res.status(403).json({
+            message: `Access denied. Required department(s): ${departments.join(', ')}`,
+            yourDepartment: dept || 'none'
+        });
+    }
+    next();
+};
+
+module.exports = { verifyToken, isCitizen, isAdmin, requireOfficerRole, requireDepartment };

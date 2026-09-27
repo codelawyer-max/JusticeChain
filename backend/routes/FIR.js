@@ -4,7 +4,7 @@ const path = require('path');
 const PDFDocument = require('pdfkit');
 const dotenv = require('dotenv');
 const axios = require('axios');
-const { verifyToken, isCitizen, isAdmin } = require('../middleware/auth');
+const { verifyToken, isCitizen, isAdmin, requireOfficerRole } = require('../middleware/auth');
 const { uploadFileToPinata, uploadJSONToPinata, uploadMultipleFilesToPinata, getFileFromPinata } = require('../utils/pinataService');
 const Admin = require('../models/admin');
 const { emitComplaintRegistered, emitComplaintUpdated } = require('../complaintTrigger');
@@ -403,7 +403,7 @@ router.post('/publicSearch', async (req, res) => {
     }
 });
 
-router.post('/searchFIR', verifyToken, async (req, res) => {
+router.post('/searchFIR', verifyToken, isAdmin, async (req, res) => {
     try {
         const { searchType, searchValue } = req.body;
 
@@ -463,6 +463,11 @@ router.get('/getFIR/:id', verifyToken, async (req, res) => {
             return res.status(404).json({ success: false, error: 'FIR not found' });
         }
 
+        // Citizens may only view FIRs they filed; admins see all
+        if (req.user.role === 'citizen' && req.user.email !== fir.email) {
+            return res.status(403).json({ success: false, error: 'Unauthorized' });
+        }
+
         return res.json({ success: true, fir });
     } catch (err) {
         console.error('Error fetching FIR:', err);
@@ -490,7 +495,7 @@ router.get('/publicFIRs', async (req, res) => {
 
         const total = await FIR.countDocuments();
         const firs = await FIR.find()
-            .select('-mediaFilesIPFS -email -phone -address -city -state -pincode -fatherName -age -gender -occupation -idType -idNumber -suspectDetails -witnessDetails -evidenceDescription -previousComplaint -previousComplaintDetails')  
+            .select('-mediaFilesIPFS -fullName -email -phone -address -city -state -pincode -fatherName -age -gender -occupation -idType -idNumber -suspectDetails -witnessDetails -evidenceDescription -previousComplaint -previousComplaintDetails')  
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(limit);
@@ -509,7 +514,7 @@ router.get('/publicFIRs', async (req, res) => {
     }
 });
 
-router.get('/getAllFIRs', verifyToken, isAdmin, async (req, res) => {
+router.get('/getAllFIRs', verifyToken, isAdmin, requireOfficerRole('SUPER_ADMIN', 'STATION_HOUSE_OFFICER', 'INVESTIGATING_OFFICER', 'PUBLIC_PROSECUTOR'), async (req, res) => {
     try {
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
@@ -519,10 +524,12 @@ router.get('/getAllFIRs', verifyToken, isAdmin, async (req, res) => {
         console.log('getAllFIRs called by admin:', req.user.email, 'adminRecord:', !!admin);
         if (admin) console.log('admin.state=', admin.state);
         
+        const isSuperAdmin = req.user?.officerRole === 'SUPER_ADMIN' || admin?.officerRole === 'SUPER_ADMIN';
         let query = {};
         
-        if (admin && admin.state) {
-            query = { state: admin.state };
+        // Non-SUPER_ADMIN officers are restricted to their state
+        if (!isSuperAdmin && admin && admin.state) {
+            query = { state: new RegExp('^' + admin.state.trim() + '$', 'i') };
         }
 
         const total = await FIR.countDocuments(query);
@@ -548,7 +555,7 @@ router.get('/getAllFIRs', verifyToken, isAdmin, async (req, res) => {
     }
 });
 
-router.put('/updateStatus/:id', verifyToken, isAdmin, async (req, res) => {
+router.put('/updateStatus/:id', verifyToken, isAdmin, requireOfficerRole('STATION_HOUSE_OFFICER', 'INVESTIGATING_OFFICER', 'SUPER_ADMIN'), async (req, res) => {
     try {
         const { status, description, officer } = req.body;
 
@@ -641,6 +648,11 @@ router.get('/downloadFIR/:id', verifyToken, async (req, res) => {
         const id = req.params.id;
         const fir = await FIR.findById(id).lean();
         if (!fir) return res.status(404).json({ success: false, error: 'FIR not found' });
+
+        // Citizens may only download their own FIR PDF; admins see all
+        if (req.user.role === 'citizen' && req.user.email !== fir.email) {
+            return res.status(403).json({ success: false, error: 'Unauthorized' });
+        }
 
         const pdfFile = path.join(__dirname, '..', 'fir_pdfs', `fir_${fir._id}.pdf`);
         
@@ -779,6 +791,11 @@ router.get('/downloadComplaint/:id', verifyToken, async (req, res) => {
         const fir = await FIR.findById(id).lean();
         if (!fir) return res.status(404).json({ success: false, error: 'FIR not found' });
 
+        // Citizens may only download their own complaint PDF; admins see all
+        if (req.user.role === 'citizen' && req.user.email !== fir.email) {
+            return res.status(403).json({ success: false, error: 'Unauthorized' });
+        }
+
         const pdfFile = path.join(__dirname, '..', 'fir_pdfs', `complaint_${fir._id}.pdf`);
 
         // If PDF file doesn't exist, generate it
@@ -863,11 +880,16 @@ router.get('/downloadComplaint/:id', verifyToken, async (req, res) => {
     }
 });
 
-router.get('/getIPFSFile/:id', async (req, res) => {
+router.get('/getIPFSFile/:id', verifyToken, async (req, res) => {
     try {
         const fir = await FIR.findById(req.params.id).lean();
         if (!fir || !fir.ipfsHash) {
             return res.status(404).json({ success: false, error: 'IPFS file not found' });
+        }
+
+        // Only the citizen who filed this FIR or an admin may retrieve its IPFS file
+        if (req.user.role === 'citizen' && req.user.email !== fir.email) {
+            return res.status(403).json({ success: false, error: 'Unauthorized' });
         }
 
         const pinataResult = await getFileFromPinata(fir.ipfsHash);
@@ -896,8 +918,12 @@ router.post('/uploadMedia/:firId', verifyToken, async (req, res) => {
             return res.status(404).json({ success: false, error: 'FIR not found' });
         }
 
-        if (req.user.userType === 'citizen' && req.user.email !== fir.email) {
-            return res.status(403).json({ success: false, error: 'Unauthorized' });
+        // Ownership check: citizens may only upload media to their own FIR.
+        // Original code checked req.user.userType which never exists in this JWT
+        // (the JWT field is `role`), so the guard silently never fired for anyone.
+        // Fixed: citizens are gated to their own FIR by email; admins pass freely.
+        if (req.user.role === 'citizen' && req.user.email !== fir.email) {
+            return res.status(403).json({ success: false, error: 'Unauthorized: you can only upload media to your own FIR' });
         }
 
         const uploadedFiles = [];
@@ -960,12 +986,17 @@ router.post('/uploadMedia/:firId', verifyToken, async (req, res) => {
     }
 });
 
-router.get('/getMedia/:firId', async (req, res) => {
+router.get('/getMedia/:firId', verifyToken, async (req, res) => {
     try {
-        const fir = await FIR.findById(req.params.firId).select('mediaFilesIPFS');
+        const fir = await FIR.findById(req.params.firId).select('mediaFilesIPFS email');
 
         if (!fir) {
             return res.status(404).json({ success: false, error: 'FIR not found' });
+        }
+
+        // Only the citizen who filed this FIR or an admin may retrieve its media
+        if (req.user.role === 'citizen' && req.user.email !== fir.email) {
+            return res.status(403).json({ success: false, error: 'Unauthorized' });
         }
 
         return res.json({
@@ -980,13 +1011,14 @@ router.get('/getMedia/:firId', async (req, res) => {
     }
 });
 
-router.get('/getStatistics', verifyToken, isAdmin, async (req, res) => {
+router.get('/getStatistics', verifyToken, isAdmin, requireOfficerRole('SUPER_ADMIN', 'STATION_HOUSE_OFFICER'), async (req, res) => {
     try {
         const admin = await Admin.findOne({ email: req.user.email });
+        const isSuperAdmin = req.user?.officerRole === 'SUPER_ADMIN' || admin?.officerRole === 'SUPER_ADMIN';
         
         let query = {};
-        if (admin && admin.state) {
-            query = { state: admin.state };
+        if (!isSuperAdmin && admin && admin.state) {
+            query = { state: new RegExp('^' + admin.state.trim() + '$', 'i') };
         }
 
         const total = await FIR.countDocuments(query);
@@ -1013,7 +1045,7 @@ router.get('/getStatistics', verifyToken, isAdmin, async (req, res) => {
 });
 
 // Notify citizen by email that their FIR was registered on-chain
-router.post('/notifyRegistration', verifyToken, isAdmin, async (req, res) => {
+router.post('/notifyRegistration', verifyToken, isAdmin, requireOfficerRole('SUPER_ADMIN', 'INVESTIGATING_OFFICER'), async (req, res) => {
     try {
         const { firId, txHash } = req.body;
         if (!firId) return res.status(400).json({ success: false, error: 'firId required' });
@@ -1071,7 +1103,7 @@ router.post('/notifyRegistration', verifyToken, isAdmin, async (req, res) => {
 });
 
 // Save tokenId returned from blockchain after minting
-router.post('/saveTokenId', verifyToken, isAdmin, async (req, res) => {
+router.post('/saveTokenId', verifyToken, isAdmin, requireOfficerRole('SUPER_ADMIN'), async (req, res) => {
     try {
         const { firId, tokenId } = req.body || {};
         if (!firId || !tokenId) return res.status(400).json({ success: false, error: 'firId and tokenId required' });
@@ -1124,7 +1156,7 @@ router.post('/testEmail', verifyToken, isAdmin, async (req, res) => {
 
 // Debug endpoint (admin-only) to inspect FIR counts and admin state quickly
 // Note: This is for development only; remove or protect in production.
-router.get('/debug/admin-firs', verifyToken, isAdmin, async (req, res) => {
+router.get('/debug/admin-firs', verifyToken, isAdmin, requireOfficerRole('SUPER_ADMIN'), async (req, res) => {
     try {
         const admin = await Admin.findOne({ email: req.user.email });
         const query = (admin && admin.state) ? { state: admin.state } : {};
