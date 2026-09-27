@@ -4,7 +4,7 @@ const path = require('path');
 const PDFDocument = require('pdfkit');
 const dotenv = require('dotenv');
 const axios = require('axios');
-const { verifyToken, isCitizen, isAdmin } = require('../middleware/auth');
+const { verifyToken, isCitizen, isAdmin, requireOfficerRole } = require('../middleware/auth');
 const { uploadFileToPinata, uploadJSONToPinata, uploadMultipleFilesToPinata, getFileFromPinata } = require('../utils/pinataService');
 const Admin = require('../models/admin');
 const { emitComplaintRegistered, emitComplaintUpdated } = require('../complaintTrigger');
@@ -514,7 +514,7 @@ router.get('/publicFIRs', async (req, res) => {
     }
 });
 
-router.get('/getAllFIRs', verifyToken, isAdmin, async (req, res) => {
+router.get('/getAllFIRs', verifyToken, isAdmin, requireOfficerRole('SUPER_ADMIN', 'STATION_HOUSE_OFFICER', 'INVESTIGATING_OFFICER', 'PUBLIC_PROSECUTOR'), async (req, res) => {
     try {
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
@@ -553,7 +553,7 @@ router.get('/getAllFIRs', verifyToken, isAdmin, async (req, res) => {
     }
 });
 
-router.put('/updateStatus/:id', verifyToken, isAdmin, async (req, res) => {
+router.put('/updateStatus/:id', verifyToken, isAdmin, requireOfficerRole('STATION_HOUSE_OFFICER', 'INVESTIGATING_OFFICER', 'SUPER_ADMIN'), async (req, res) => {
     try {
         const { status, description, officer } = req.body;
 
@@ -1009,7 +1009,7 @@ router.get('/getMedia/:firId', verifyToken, async (req, res) => {
     }
 });
 
-router.get('/getStatistics', verifyToken, isAdmin, async (req, res) => {
+router.get('/getStatistics', verifyToken, isAdmin, requireOfficerRole('SUPER_ADMIN', 'STATION_HOUSE_OFFICER'), async (req, res) => {
     try {
         const admin = await Admin.findOne({ email: req.user.email });
         
@@ -1042,7 +1042,7 @@ router.get('/getStatistics', verifyToken, isAdmin, async (req, res) => {
 });
 
 // Notify citizen by email that their FIR was registered on-chain
-router.post('/notifyRegistration', verifyToken, isAdmin, async (req, res) => {
+router.post('/notifyRegistration', verifyToken, isAdmin, requireOfficerRole('SUPER_ADMIN', 'INVESTIGATING_OFFICER'), async (req, res) => {
     try {
         const { firId, txHash } = req.body;
         if (!firId) return res.status(400).json({ success: false, error: 'firId required' });
@@ -1100,7 +1100,7 @@ router.post('/notifyRegistration', verifyToken, isAdmin, async (req, res) => {
 });
 
 // Save tokenId returned from blockchain after minting
-router.post('/saveTokenId', verifyToken, isAdmin, async (req, res) => {
+router.post('/saveTokenId', verifyToken, isAdmin, requireOfficerRole('SUPER_ADMIN'), async (req, res) => {
     try {
         const { firId, tokenId } = req.body || {};
         if (!firId || !tokenId) return res.status(400).json({ success: false, error: 'firId and tokenId required' });
@@ -1153,7 +1153,7 @@ router.post('/testEmail', verifyToken, isAdmin, async (req, res) => {
 
 // Debug endpoint (admin-only) to inspect FIR counts and admin state quickly
 // Note: This is for development only; remove or protect in production.
-router.get('/debug/admin-firs', verifyToken, isAdmin, async (req, res) => {
+router.get('/debug/admin-firs', verifyToken, isAdmin, requireOfficerRole('SUPER_ADMIN'), async (req, res) => {
     try {
         const admin = await Admin.findOne({ email: req.user.email });
         const query = (admin && admin.state) ? { state: admin.state } : {};
