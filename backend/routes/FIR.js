@@ -524,10 +524,12 @@ router.get('/getAllFIRs', verifyToken, isAdmin, requireOfficerRole('SUPER_ADMIN'
         console.log('getAllFIRs called by admin:', req.user.email, 'adminRecord:', !!admin);
         if (admin) console.log('admin.state=', admin.state);
         
+        const isSuperAdmin = req.user?.officerRole === 'SUPER_ADMIN' || admin?.officerRole === 'SUPER_ADMIN';
         let query = {};
         
-        if (admin && admin.state) {
-            query = { state: admin.state };
+        // Non-SUPER_ADMIN officers are restricted to their state
+        if (!isSuperAdmin && admin && admin.state) {
+            query = { state: new RegExp('^' + admin.state.trim() + '$', 'i') };
         }
 
         const total = await FIR.countDocuments(query);
@@ -1012,10 +1014,11 @@ router.get('/getMedia/:firId', verifyToken, async (req, res) => {
 router.get('/getStatistics', verifyToken, isAdmin, requireOfficerRole('SUPER_ADMIN', 'STATION_HOUSE_OFFICER'), async (req, res) => {
     try {
         const admin = await Admin.findOne({ email: req.user.email });
+        const isSuperAdmin = req.user?.officerRole === 'SUPER_ADMIN' || admin?.officerRole === 'SUPER_ADMIN';
         
         let query = {};
-        if (admin && admin.state) {
-            query = { state: admin.state };
+        if (!isSuperAdmin && admin && admin.state) {
+            query = { state: new RegExp('^' + admin.state.trim() + '$', 'i') };
         }
 
         const total = await FIR.countDocuments(query);

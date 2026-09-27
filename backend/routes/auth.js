@@ -183,14 +183,21 @@ router.post('/admin/login', async (req, res) => {
             return res.status(400).json({ message: 'Invalid password' });
         }
 
+        // Legacy admins fallback to SUPER_ADMIN
+        const officerRole = admin.officerRole || 'SUPER_ADMIN';
+        if (!admin.officerRole) {
+            admin.officerRole = officerRole;
+            await admin.save();
+        }
+
         // ---- ADD JWT HERE ----
         const token = jwt.sign(
             {
                 id:          admin._id,
                 email:       admin.email,
                 role:        'admin',
-                officerRole: admin.officerRole || null,
-                department:  admin.department  || null
+                officerRole: officerRole,
+                department:  admin.department || null
             },
             process.env.JWT_SECRET,
             { expiresIn: '7d' }
