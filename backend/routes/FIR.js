@@ -863,11 +863,16 @@ router.get('/downloadComplaint/:id', verifyToken, async (req, res) => {
     }
 });
 
-router.get('/getIPFSFile/:id', async (req, res) => {
+router.get('/getIPFSFile/:id', verifyToken, async (req, res) => {
     try {
         const fir = await FIR.findById(req.params.id).lean();
         if (!fir || !fir.ipfsHash) {
             return res.status(404).json({ success: false, error: 'IPFS file not found' });
+        }
+
+        // Only the citizen who filed this FIR or an admin may retrieve its IPFS file
+        if (req.user.role === 'citizen' && req.user.email !== fir.email) {
+            return res.status(403).json({ success: false, error: 'Unauthorized' });
         }
 
         const pinataResult = await getFileFromPinata(fir.ipfsHash);
@@ -964,12 +969,17 @@ router.post('/uploadMedia/:firId', verifyToken, async (req, res) => {
     }
 });
 
-router.get('/getMedia/:firId', async (req, res) => {
+router.get('/getMedia/:firId', verifyToken, async (req, res) => {
     try {
-        const fir = await FIR.findById(req.params.firId).select('mediaFilesIPFS');
+        const fir = await FIR.findById(req.params.firId).select('mediaFilesIPFS email');
 
         if (!fir) {
             return res.status(404).json({ success: false, error: 'FIR not found' });
+        }
+
+        // Only the citizen who filed this FIR or an admin may retrieve its media
+        if (req.user.role === 'citizen' && req.user.email !== fir.email) {
+            return res.status(403).json({ success: false, error: 'Unauthorized' });
         }
 
         return res.json({
