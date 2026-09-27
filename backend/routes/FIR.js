@@ -495,7 +495,7 @@ router.get('/publicFIRs', async (req, res) => {
 
         const total = await FIR.countDocuments();
         const firs = await FIR.find()
-            .select('-mediaFilesIPFS -email -phone -address -city -state -pincode -fatherName -age -gender -occupation -idType -idNumber -suspectDetails -witnessDetails -evidenceDescription -previousComplaint -previousComplaintDetails')  
+            .select('-mediaFilesIPFS -fullName -email -phone -address -city -state -pincode -fatherName -age -gender -occupation -idType -idNumber -suspectDetails -witnessDetails -evidenceDescription -previousComplaint -previousComplaintDetails')  
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(limit);
