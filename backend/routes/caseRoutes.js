@@ -9,7 +9,7 @@ const {
     deleteCase
 } = require('../controllers/caseController');
 
-const { verifyToken } = require('../middleware/auth');
+const { verifyToken, isAdmin } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -22,13 +22,13 @@ router.get('/', verifyToken, getCases);
 // Get single case
 router.get('/:id', verifyToken, getCaseById);
 
-// Update case
-router.put('/:id', verifyToken, updateCase);
+// Update case — admin only
+router.put('/:id', verifyToken, isAdmin, updateCase);
 
-// Update case status
-router.patch('/:id/status', verifyToken, updateCaseStatus);
+// Update case status — admin only
+router.patch('/:id/status', verifyToken, isAdmin, updateCaseStatus);
 
-// Delete case
-router.delete('/:id', verifyToken, deleteCase);
+// Delete case — admin only
+router.delete('/:id', verifyToken, isAdmin, deleteCase);
 
 module.exports = router;

@@ -896,8 +896,12 @@ router.post('/uploadMedia/:firId', verifyToken, async (req, res) => {
             return res.status(404).json({ success: false, error: 'FIR not found' });
         }
 
-        if (req.user.userType === 'citizen' && req.user.email !== fir.email) {
-            return res.status(403).json({ success: false, error: 'Unauthorized' });
+        // Ownership check: citizens may only upload media to their own FIR.
+        // Original code checked req.user.userType which never exists in this JWT
+        // (the JWT field is `role`), so the guard silently never fired for anyone.
+        // Fixed: citizens are gated to their own FIR by email; admins pass freely.
+        if (req.user.role === 'citizen' && req.user.email !== fir.email) {
+            return res.status(403).json({ success: false, error: 'Unauthorized: you can only upload media to your own FIR' });
         }
 
         const uploadedFiles = [];
