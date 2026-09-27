@@ -526,6 +526,36 @@ const getDocuments = async (req, res) => {
             filter.$text = { $search: search };
         }
 
+        // ── Permission filtering ──────────────────────────────────────────────
+        // Admins see everything. Everyone else sees only documents they
+        // uploaded or have an ACTIVE DocumentPermission with view:true for.
+        const requesterId   = req.user?._id || req.user?.id;
+        const requesterRole = req.user?.role;
+
+        if (requesterRole !== 'admin') {
+            const now = new Date();
+
+            // Collect IDs of documents this user has been explicitly granted access to
+            const activePerms = await DocumentPermission.find({
+                grantedTo:          requesterId,
+                status:             'ACTIVE',
+                'permissions.view': true,
+                $or: [
+                    { expiresAt: null },
+                    { expiresAt: { $gt: now } }
+                ]
+            }).select('document');
+
+            const permittedDocIds = activePerms.map(p => p.document);
+
+            // Narrow the query: uploader OR explicitly permitted
+            filter.$or = [
+                { uploadedBy: requesterId },
+                { _id: { $in: permittedDocIds } }
+            ];
+        }
+        // ─────────────────────────────────────────────────────────────────────
+
         const pageNumber = Math.max(parseInt(page, 10) || 1, 1);
         const pageSize = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
 
