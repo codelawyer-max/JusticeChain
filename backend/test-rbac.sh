@@ -40,17 +40,18 @@ warn()   { echo -e "${YELLOW}! $*${NC}"; }
 pretty() { python3 -m json.tool 2>/dev/null || cat; }
 
 # ── Preflight ─────────────────────────────────────────────────────────────────
-[[ -z "${SUPER_TOKEN:-}" ]] && { fail "SUPER_TOKEN env var is required"; exit 1; }
-[[ -z "${DOC_ID:-}"      ]] && { fail "DOC_ID env var is required"; exit 1; }
-
-SUPER_AUTH="Authorization: Bearer $SUPER_TOKEN"
-
 # Random suffix so re-runs don't collide on the unique-email constraint
 SUFFIX="${RANDOM}"
 EMAIL_A="officer.a.${SUFFIX}@justicechain.test"
 EMAIL_B="officer.b.${SUFFIX}@justicechain.test"
 EMAIL_S="superadmin.${SUFFIX}@justicechain.test"
 PASS="TestPass123!"
+
+SUPER_AUTH=""
+if [[ -n "${SUPER_TOKEN:-}" ]]; then
+    SUPER_AUTH="Authorization: Bearer $SUPER_TOKEN"
+    ok "Using provided SUPER_TOKEN"
+fi
 
 
 # ── Step 1: Register without officerRole → must be 400 ───────────────────────
@@ -109,6 +110,28 @@ RESP_S=$(curl -s -X POST "$BASE/api/auth/admin/register" \
   }")
 echo "$RESP_S" | pretty
 echo "$RESP_S" | grep -qi "successfully" && ok "SUPER_ADMIN registered" || fail "SUPER_ADMIN registration failed"
+
+# Auto-acquire SUPER_TOKEN if not explicitly passed
+if [[ -z "$SUPER_AUTH" ]]; then
+    LOGIN_S=$(curl -s -X POST "$BASE/api/auth/admin/login" \
+      -H "Content-Type: application/json" \
+      -d "{\"email\":\"$EMAIL_S\",\"password\":\"$PASS\"}")
+    SUPER_TOKEN=$(echo "$LOGIN_S" | python3 -c \
+      "import sys,json; print(json.load(sys.stdin).get('token',''))" 2>/dev/null || true)
+    [[ -n "$SUPER_TOKEN" ]] && ok "Logged in as new SUPER_ADMIN" || { fail "Failed to login as new SUPER_ADMIN"; exit 1; }
+    SUPER_AUTH="Authorization: Bearer $SUPER_TOKEN"
+fi
+
+# Auto-discover DOC_ID if not explicitly provided
+if [[ -z "${DOC_ID:-}" ]]; then
+    DOC_ID=$(curl -s -X GET "$BASE/api/documents" -H "$SUPER_AUTH" | python3 -c \
+      "import sys,json; docs=json.load(sys.stdin).get('documents',[]); print(docs[0].get('_id','') if docs else '')" 2>/dev/null || true)
+    if [[ -z "$DOC_ID" ]]; then
+        fail "No documents found in database. Please upload a document first or pass DOC_ID=<id>."
+        exit 1
+    fi
+    ok "Discovered test document ID: $DOC_ID"
+fi
 
 
 # ── Login officer A → get token ───────────────────────────────────────────────

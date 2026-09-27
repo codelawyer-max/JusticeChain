@@ -527,12 +527,12 @@ const getDocuments = async (req, res) => {
         }
 
         // ── Permission filtering ──────────────────────────────────────────────
-        // Admins see everything. Everyone else sees only documents they
+        // SUPER_ADMIN sees everything. Everyone else sees only documents they
         // uploaded or have an ACTIVE DocumentPermission with view:true for.
         const requesterId   = req.user?._id || req.user?.id;
-        const requesterRole = req.user?.role;
+        const isSuperAdmin  = req.user?.officerRole === 'SUPER_ADMIN';
 
-        if (requesterRole !== 'admin') {
+        if (!isSuperAdmin) {
             const now = new Date();
 
             // Collect IDs of documents this user has been explicitly granted access to
@@ -611,15 +611,14 @@ const getDocumentById = async (req, res) => {
         }
 
         // ── Access control ────────────────────────────────────────────────────
-        // Allow if: (1) requester is admin, OR (2) requester is the uploader,
+        // Allow if: (1) requester is SUPER_ADMIN, OR (2) requester is the uploader,
         // OR (3) an ACTIVE DocumentPermission with view:true exists and hasn't
         // expired. Everyone else gets 403 — no audit entry, no information leak.
         const requesterId    = req.user?._id || req.user?.id;
-        const requesterRole  = req.user?.role;
-        const isAdmin        = requesterRole === 'admin';
+        const isSuperAdmin   = req.user?.officerRole === 'SUPER_ADMIN';
         const isUploader     = String(document.uploadedBy) === String(requesterId);
 
-        if (!isAdmin && !isUploader) {
+        if (!isSuperAdmin && !isUploader) {
             const now = new Date();
             const activePerm = await DocumentPermission.findOne({
                 document:          document._id,
