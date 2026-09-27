@@ -5,6 +5,7 @@ const pinataSDK = require('@pinata/sdk');
 
 const Document = require('../models/document');
 const DocumentVersion = require('../models/documentVersion');
+const DocumentPermission = require('../models/documentPermission');
 const Case = require('../models/case');
 
 const { calculateSHA256 } = require('../utils/documentHash');
@@ -578,6 +579,37 @@ const getDocumentById = async (req, res) => {
                 message: 'Document not found'
             });
         }
+
+        // ── Access control ────────────────────────────────────────────────────
+        // Allow if: (1) requester is admin, OR (2) requester is the uploader,
+        // OR (3) an ACTIVE DocumentPermission with view:true exists and hasn't
+        // expired. Everyone else gets 403 — no audit entry, no information leak.
+        const requesterId    = req.user?._id || req.user?.id;
+        const requesterRole  = req.user?.role;
+        const isAdmin        = requesterRole === 'admin';
+        const isUploader     = String(document.uploadedBy) === String(requesterId);
+
+        if (!isAdmin && !isUploader) {
+            const now = new Date();
+            const activePerm = await DocumentPermission.findOne({
+                document:          document._id,
+                grantedTo:         requesterId,
+                status:            'ACTIVE',
+                'permissions.view': true,
+                $or: [
+                    { expiresAt: null },
+                    { expiresAt: { $gt: now } }
+                ]
+            });
+
+            if (!activePerm) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'You do not have permission to view this document'
+                });
+            }
+        }
+        // ─────────────────────────────────────────────────────────────────────
 
         const versions = await DocumentVersion.find({
             document: document._id
