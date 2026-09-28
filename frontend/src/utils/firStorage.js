@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://localhost:5000/api';
+import { API_BASE_URL, BLOCKCHAIN_URL } from '../config';
 
 export class FIRStorage {
   // Search FIR by various criteria (public - no auth required)
@@ -249,16 +249,20 @@ export class FIRStorage {
         throw new Error('Failed to fetch FIR data: ' + JSON.stringify(firDataResp));
       }
 
+      if (!BLOCKCHAIN_URL) {
+        return { success: false, error: 'Blockchain backend URL is not configured (set VITE_BLOCKCHAIN_URL).' };
+      }
+
       const payload = firDataResp.fir;
       if (citizenAddress) payload.citizenAddress = citizenAddress;
 
-      // Send to blockchain backend service (runs on port 3000) with timeout
+      // Send to blockchain backend service with timeout
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 180000); // 3 minute timeout for blockchain confirmation
       
-      console.log('registerFIROnChain: Making request to http://localhost:3000/api/uploadFIR');
+      console.log(`registerFIROnChain: Making request to ${BLOCKCHAIN_URL}/api/uploadFIR`);
       
-      const response = await fetch(`http://localhost:3000/api/uploadFIR`, {
+      const response = await fetch(`${BLOCKCHAIN_URL}/api/uploadFIR`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -282,13 +286,13 @@ export class FIRStorage {
     } catch (error) {
       if (error.name === 'AbortError') {
         console.error('registerFIROnChain: Request timeout - blockchain backend not responding');
-        return { success: false, error: 'Blockchain backend timeout - is it running on port 3000?' };
+        return { success: false, error: 'Blockchain backend timeout - is it running at ' + BLOCKCHAIN_URL + '?' };
       }
       console.error('Error registering FIR on chain:', error);
       // Provide a clearer error message when the blockchain backend is unreachable
       const msg = error && error.message ? error.message : String(error);
       if (msg.toLowerCase().includes('failed to fetch') || msg.toLowerCase().includes('networkrequestfailed') || msg.toLowerCase().includes('networkerror')) {
-        return { success: false, error: 'Could not reach blockchain backend at http://localhost:3000. Is the blockchain backend running? ' + msg };
+        return { success: false, error: 'Could not reach blockchain backend at ' + BLOCKCHAIN_URL + '. Is the blockchain backend running? ' + msg };
       }
       return { success: false, error: msg };
     }

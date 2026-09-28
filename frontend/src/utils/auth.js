@@ -1,5 +1,5 @@
 // AuthService.js - uses real backend (MongoDB)
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+import { BACKEND_URL as API_URL } from '../config';
 
 export class AuthService {
   static CITIZEN_STORAGE_KEY = 'justice_chain_citizen_auth';
@@ -194,4 +194,3 @@ export class AuthService {
     return this.isAuthenticated(userType);
   }
 }
-

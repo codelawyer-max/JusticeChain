@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "../contexts/AuthContext";
+import { API_BASE_URL } from "../config";
 
 const TrackStatus = () => {
   const { user } = useAuth();
@@ -17,7 +18,7 @@ const TrackStatus = () => {
     setHasSearched(false);
 
     try {
-      const response = await fetch('http://localhost:5000/api/publicSearch', {
+      const response = await fetch(`${API_BASE_URL}/publicSearch`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

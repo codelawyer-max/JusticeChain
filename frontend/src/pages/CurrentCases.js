@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../config';
 
 const CurrentCases = () => {
   const [cases, setCases] = useState([]);
@@ -12,7 +13,7 @@ const CurrentCases = () => {
       try {
         setLoading(true);
         // Fetch from public endpoint (no authentication required)
-        const response = await fetch('http://localhost:5000/api/publicFIRs?page=1&limit=100');
+        const response = await fetch(`${API_BASE_URL}/publicFIRs?page=1&limit=100`);
         
         if (!response.ok) {
           throw new Error(`Server error ${response.status}`);

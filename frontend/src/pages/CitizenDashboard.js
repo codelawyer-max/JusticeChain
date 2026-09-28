@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AuthService } from '../utils/auth';
 import { FIRStorage } from '../utils/firStorage';
+import { API_BASE_URL } from '../config';
 import { useCitizenNotifications } from '../../hooks/useCitizenNotifications';
 import { FIRToastStack } from '../components/FIRToast';
 
@@ -256,7 +257,7 @@ const CitizenDashboard = () => {
                         <button
                           onClick={async () => {
                             try {
-                              const resp = await fetch(`http://localhost:5000/api/downloadFIR/${fir._id}`, {
+                              const resp = await fetch(`${API_BASE_URL}/downloadFIR/${fir._id}`, {
                                 headers: {
                                   'Authorization': `Bearer ${user.token}`
                                 }
@@ -298,4 +299,4 @@ const CitizenDashboard = () => {
   );
 };
 
-export default CitizenDashboard; 
+export default CitizenDashboard;

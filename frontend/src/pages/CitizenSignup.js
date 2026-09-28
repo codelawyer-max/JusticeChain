@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { API_BASE_URL } from '../config';
 
 const CitizenSignup = () => {
   const [formData, setFormData] = useState({
@@ -39,7 +40,7 @@ const CitizenSignup = () => {
       return 'Password must be at least 6 characters long';
     }
 
-    if (!/^\S+@\S+\.\S+$/.test(formData.email.toLowerCase())) {
+    if (!/^\S+@\S+\.\S+$/.test(formData.email)) {
       return 'Please enter a valid email address';
     }
 
@@ -64,9 +65,9 @@ const CitizenSignup = () => {
     }
 
     try {
-      const res = await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/auth/citizen/register`, {
+      const res = await axios.post(`${API_BASE_URL}/auth/citizen/register`, {
         fullName: formData.fullName,
-        email: formData.email.toLowerCase(),
+        email: formData.email,
         phone: formData.phone,
         password: formData.password
       });
@@ -81,7 +82,7 @@ const CitizenSignup = () => {
       }
     } catch (err) {
       console.error(err);
-      if (err.response?.status === 400) {
+      if (err.response?.status === 400 && err.response.data.message === 'Citizen already exists') {
         setError('Citizen with this email already exists.');
       } else {
         setError('Server error, please try again later.');
@@ -214,5 +215,3 @@ const CitizenSignup = () => {
 };
 
 export default CitizenSignup;
-
-

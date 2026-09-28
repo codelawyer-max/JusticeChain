@@ -1,5 +1,3 @@
-require('dotenv').config();
-
 const express = require('express');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
@@ -8,18 +6,49 @@ const cors = require('cors');
 const multer = require('multer');
 const caseRoutes = require('./routes/caseRoutes');
 const documentRoutes = require('./routes/documentRoutes');
-const auditLogRoutes = require('./routes/auditLogRoutes');
-const permissionRoutes = require('./routes/permissionRoutes');
+require('dotenv').config();
 
 const { emitComplaintRegistered, emitComplaintUpdated } = require('./complaintTrigger');
 const authRoutes = require('./routes/auth');
 const firRoutes = require('./routes/FIR');
 
+// ── Allowed origins for CORS ─────────────────────────────────────────────
+// Local dev ports are always allowed. Production frontend origins (e.g. your
+// Vercel URL) are read from the ALLOWED_ORIGINS env var on Render, so you can
+// add/update them there without touching or redeploying this code.
+// Set on Render as a comma-separated list, e.g.:
+//   ALLOWED_ORIGINS=https://your-app.vercel.app,https://your-app-git-main.vercel.app
+const defaultOrigins = [
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'http://localhost:5175',
+  'http://localhost:5176',
+  'http://localhost:5177',
+  'http://localhost:3000'
+];
+
+const envOrigins = (process.env.ALLOWED_ORIGINS || '')
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
+
+const allowedOrigins = [...defaultOrigins, ...envOrigins];
+
+// Function form so we can log/reject unknown origins instead of silently
+// allowing or blocking everything.
+const corsOriginCheck = (origin, callback) => {
+  // Allow non-browser requests (curl, Postman, server-to-server) which send no Origin header.
+  if (!origin) return callback(null, true);
+  if (allowedOrigins.includes(origin)) return callback(null, true);
+  console.warn(`[CORS] Blocked request from origin: ${origin}`);
+  return callback(new Error(`Not allowed by CORS: ${origin}`));
+};
+
 const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'http://localhost:5176', 'http://localhost:5177', 'http://localhost:3000'],
+    origin: corsOriginCheck,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     credentials: true
   },
@@ -66,7 +95,7 @@ const upload = multer({
 
 // Advanced CORS configuration
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'http://localhost:5176', 'http://localhost:5177', 'http://localhost:3000'],
+  origin: corsOriginCheck,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
@@ -86,11 +115,9 @@ app.use((req, res, next) => {
 });
 
 app.use('/api/auth', authRoutes);
+app.use('/api', upload.array('files'), firRoutes);
 app.use('/api/cases', caseRoutes);
 app.use('/api/documents', documentRoutes);
-app.use('/api/audit-logs', auditLogRoutes);
-app.use('/api/permissions', permissionRoutes);
-app.use('/api', upload.array('files'), firRoutes);
 
 
 // Error handling middleware
@@ -116,5 +143,3 @@ if (!MONGO_CONN) {
       startServer();
     });
 }
-
-

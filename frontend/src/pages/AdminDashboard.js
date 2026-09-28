@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AuthService } from '../utils/auth';
 import { FIRStorage } from '../utils/firStorage';
+import { API_BASE_URL } from '../config';
 import { useAdminNotifications } from '../../hooks/useAdminNotifications';
 import { FIRToastStack } from '../components/FIRToast';
 
@@ -16,31 +17,7 @@ const AdminDashboard = () => {
   const [selectedFIR, setSelectedFIR] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [totalFIRs, setTotalFIRs] = useState(0);
   const navigate = useNavigate();
-
-  const handlePageChange = async (newPage) => {
-    if (newPage < 1 || newPage > totalPages || newPage === currentPage) return;
-    const token = user?.token;
-    if (!token) return;
-
-    setLoading(true);
-    try {
-      const result = await FIRStorage.getAllFIRs(token, newPage, 10);
-      const firs = result.firs || [];
-      setAllFIRs(firs);
-      setFilteredFIRs(firs);
-      setCurrentPage(newPage);
-      setTotalPages(result.pages || 1);
-      setTotalFIRs(result.total || 0);
-    } catch (err) {
-      console.error('Error changing page:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   useEffect(() => {
     const loadAdminData = async () => {
@@ -55,13 +32,10 @@ const AdminDashboard = () => {
 
         // Load all FIRs from backend using token
         if (authUser.token) {
-          const result = await FIRStorage.getAllFIRs(authUser.token, 1, 10);
+          const result = await FIRStorage.getAllFIRs(authUser.token);
           const firs = result.firs || [];
           setAllFIRs(firs);
           setFilteredFIRs(firs);
-          setCurrentPage(1);
-          setTotalPages(result.pages || 1);
-          setTotalFIRs(result.total || firs.length);
 
           // Calculate statistics
           const statistics = await FIRStorage.getStatistics(authUser.token);
@@ -153,10 +127,8 @@ const AdminDashboard = () => {
 
       if (result.success) {
         // Refresh the FIRs list from backend
-        const updatedResult = await FIRStorage.getAllFIRs(user.token, currentPage, 10);
+        const updatedResult = await FIRStorage.getAllFIRs(user.token);
         setAllFIRs(updatedResult.firs || []);
-        setTotalPages(updatedResult.pages || 1);
-        setTotalFIRs(updatedResult.total || 0);
         
         // Recalculate statistics
         const statistics = await FIRStorage.getStatistics(user.token);
@@ -596,7 +568,7 @@ const AdminDashboard = () => {
             </div>
 
             <div className="text-sm text-gray-600">
-              Showing {filteredFIRs.length} FIRs on page {currentPage} of {totalPages} (Total: {totalFIRs})
+              Showing {filteredFIRs.length} of {allFIRs.length} FIRs
             </div>
           </div>
         </div>
@@ -666,7 +638,7 @@ const AdminDashboard = () => {
                           <button
                             onClick={async () => {
                               try {
-                                const resp = await fetch(`http://localhost:5000/api/downloadFIR/${fir._id}`, {
+                                const resp = await fetch(`${API_BASE_URL}/downloadFIR/${fir._id}`, {
                                   headers: {
                                     'Authorization': `Bearer ${user.token}`
                                   }
@@ -714,49 +686,6 @@ const AdminDashboard = () => {
                   ))}
                 </tbody>
               </table>
-            </div>
-          )}
-
-          {/* Pagination Controls */}
-          {totalPages > 1 && (
-            <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-4">
-              <div className="text-sm text-gray-600">
-                Page <span className="font-semibold text-gray-900">{currentPage}</span> of{' '}
-                <span className="font-semibold text-gray-900">{totalPages}</span>{' '}
-                ({totalFIRs} total FIRs)
-              </div>
-              <div className="flex items-center space-x-2">
-                <button
-                  onClick={() => handlePageChange(currentPage - 1)}
-                  disabled={currentPage <= 1 || loading}
-                  className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
-                >
-                  &larr; Previous
-                </button>
-                <div className="flex space-x-1">
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
-                    <button
-                      key={pageNum}
-                      onClick={() => handlePageChange(pageNum)}
-                      disabled={loading}
-                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                        currentPage === pageNum
-                          ? 'bg-blue-600 text-white shadow-sm'
-                          : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
-                      }`}
-                    >
-                      {pageNum}
-                    </button>
-                  ))}
-                </div>
-                <button
-                  onClick={() => handlePageChange(currentPage + 1)}
-                  disabled={currentPage >= totalPages || loading}
-                  className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
-                >
-                  Next &rarr;
-                </button>
-              </div>
             </div>
           )}
         </div>

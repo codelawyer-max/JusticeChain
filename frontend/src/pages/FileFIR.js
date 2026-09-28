@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { AuthService } from '../utils/auth';
+import { API_BASE_URL, BACKEND_URL, AI_URL } from '../config';
 
 const FileFIR = () => {
   const navigate = useNavigate();
@@ -195,7 +196,7 @@ const FileFIR = () => {
           try {
             // Call backend endpoint for reverse geocoding (avoids CORS issues)
             // No authentication required for this public endpoint
-            const geoRes = await fetch('http://localhost:5000/api/reverseGeocode', {
+            const geoRes = await fetch(`${API_BASE_URL}/reverseGeocode`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json'
@@ -304,7 +305,7 @@ const FileFIR = () => {
     let severity = 2, urgencyLevel = 'medium';
     
     try {
-      const airesponse = await axios.post('http://127.0.0.1:5050/classify',
+      if (!AI_URL) throw new Error("AI disabled"); const airesponse = await axios.post(`${AI_URL}/classify`,
         {incidentDescription : formData.incidentDescription || '' }
       );
       const priority = airesponse.data?.priority?.toLowerCase();
@@ -330,7 +331,7 @@ const FileFIR = () => {
       }
     };
     
-    console.log('📦 Submitting FIR:', firDataWithUser.fullName, firDataWithUser.email);
+    console.log('ðŸ“¦ Submitting FIR:', firDataWithUser.fullName, firDataWithUser.email);
 
     try {
       const fallbackAuth = AuthService.getCurrentUser('citizen');
@@ -341,7 +342,7 @@ const FileFIR = () => {
         return;
       }
 
-      const response = await fetch('http://localhost:5000/api/uploadFIR', {
+      const response = await fetch(`${API_BASE_URL}/uploadFIR`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -366,7 +367,7 @@ const FileFIR = () => {
         const firId = result.fir._id;
         const firNumber = result.fir.firNumber;
         
-        alert(`✅ FIR SUBMITTED\nFIR Number: ${firNumber}\nNow uploading media files to Pinata...`);
+        alert(`âœ… FIR SUBMITTED\nFIR Number: ${firNumber}\nNow uploading media files to Pinata...`);
 
         // Upload media files to Pinata if any exist
         if (formData.mediaFiles.length > 0) {
@@ -399,7 +400,7 @@ const FileFIR = () => {
 
           try {
             console.log(`Uploading ${formData.mediaFiles.length} media file(s) to Pinata...`);
-            const mediaResponse = await fetch(`http://localhost:5000/api/uploadMedia/${firId}`, {
+            const mediaResponse = await fetch(`${API_BASE_URL}/uploadMedia/${firId}`, {
               method: 'POST',
               headers: {
                 'Authorization': `Bearer ${user.token}`
@@ -410,26 +411,26 @@ const FileFIR = () => {
             const mediaResult = await mediaResponse.json();
             
             if (mediaResponse.ok && mediaResult.success) {
-              console.log('✓ Media upload successful:', mediaResult);
+              console.log('âœ“ Media upload successful:', mediaResult);
               const successCount = mediaResult.uploadedFiles ? mediaResult.uploadedFiles.length : 0;
-              alert(`✅ Media files uploaded successfully!\n${successCount} file(s) saved to Pinata IPFS`);
+              alert(`âœ… Media files uploaded successfully!\n${successCount} file(s) saved to Pinata IPFS`);
             } else if (mediaResponse.ok && mediaResult.uploadedFiles && mediaResult.uploadedFiles.length > 0) {
-              console.log('⚠️  Partial media upload:', mediaResult);
+              console.log('âš ï¸  Partial media upload:', mediaResult);
               const successCount = mediaResult.uploadedFiles.length;
               const failureCount = mediaResult.failedFiles ? mediaResult.failedFiles.length : 0;
               const failureMsg = failureCount > 0 ? `\n${failureCount} file(s) failed: ${mediaResult.failedFiles.map(f => f.error).join(', ')}` : '';
-              alert(`⚠️ Partial upload completed\n${successCount} file(s) uploaded successfully to Pinata${failureMsg}`);
+              alert(`âš ï¸ Partial upload completed\n${successCount} file(s) uploaded successfully to Pinata${failureMsg}`);
             } else if (mediaResponse.status === 503) {
               console.warn('Pinata API keys not configured:', mediaResult);
-              alert(`⚠️ FIR submitted successfully!\n\nMedia upload is currently unavailable:\n${mediaResult.error}\n\nYou can still view and manage your FIR. Media files can be added later when Pinata is configured.`);
+              alert(`âš ï¸ FIR submitted successfully!\n\nMedia upload is currently unavailable:\n${mediaResult.error}\n\nYou can still view and manage your FIR. Media files can be added later when Pinata is configured.`);
             } else {
               console.error('Media upload failed:', mediaResult);
               const errorMsg = mediaResult.error || 'Unknown error';
-              alert(`⚠️ FIR submitted but media upload failed:\n${errorMsg}\n\nPlease check your Pinata API keys in the backend .env file.`);
+              alert(`âš ï¸ FIR submitted but media upload failed:\n${errorMsg}\n\nPlease check your Pinata API keys in the backend .env file.`);
             }
           } catch (mediaError) {
             console.error('Media upload network error:', mediaError);
-            alert(`⚠️ FIR submitted but media upload failed due to network error:\n${mediaError.message}\n\nPlease ensure the backend server is running on http://localhost:5000`);
+            alert(`âš ï¸ FIR submitted but media upload failed due to network error:\n${mediaError.message}\n\nPlease ensure the backend server at ${API_BASE_URL} is reachable`);
           }
         }
 
@@ -470,7 +471,7 @@ const FileFIR = () => {
           try {
             const complaintPath = result.fir.complaintPdfPath;
             if (complaintPath) {
-              const pdfRes = await fetch(`http://localhost:5000${complaintPath}`, {
+              const pdfRes = await fetch(`${BACKEND_URL}${complaintPath}`, {
                 method: 'GET',
                 headers: { 'Authorization': `Bearer ${user.token}` }
               });
@@ -499,7 +500,7 @@ const FileFIR = () => {
       } else {
         const errorMsg = result.message || result.error || 'Unknown error';
         console.error('FIR submission failed:', result);
-        alert('❌ FIR submission failed: ' + errorMsg);
+        alert('âŒ FIR submission failed: ' + errorMsg);
       }
     } catch (err) {
       console.error('FIR submission error:', err);
@@ -508,7 +509,7 @@ const FileFIR = () => {
         stack: err.stack,
         name: err.name
       });
-      alert('❌ Error submitting FIR:\n' + err.message + '\n\nPlease ensure the backend server is running on port 5000.');
+      alert('âŒ Error submitting FIR:\n' + err.message + '\n\nPlease ensure the backend server is running on port 5000.');
     }
 
     setIsSubmitting(false);
@@ -857,7 +858,7 @@ const FileFIR = () => {
 
                   {/* Media Upload Section */}
                   <div className="bg-gray-50 rounded-lg p-6 border-2 border-dashed border-gray-300">
-                    <h4 className="text-lg font-semibold text-gray-900 mb-4">📎 Upload Evidence Files</h4>
+                    <h4 className="text-lg font-semibold text-gray-900 mb-4">ðŸ“Ž Upload Evidence Files</h4>
                     <p className="text-sm text-gray-600 mb-4">
                       Upload photos, videos, or documents related to the incident. Supported formats: JPG, PNG, GIF, MP4, AVI, PDF, DOC, DOCX (Max 5MB per file)
                     </p>
