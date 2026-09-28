@@ -19,7 +19,7 @@ const PORT = process.env.PORT || 3000;
 
 let abi = [];
 try {
-    abi = JSON.parse(fs.readFileSync('./JusticeChainABI.json', 'utf8'));
+    abi = JSON.parse(fs.readFileSync(path.join(__dirname, 'JusticeChainABI.json'), 'utf8'));
 } catch (e) {
     console.warn('JusticeChainABI.json not found or invalid - blockchain features will be disabled until ABI is provided.');
 }
@@ -27,7 +27,7 @@ try {
 const COMPLAINT_CONTRACT_ADDRESS = process.env.COMPLAINT_CONTRACT_ADDRESS || '0xe7e1B7d34F9397059c388aF75138C29Ff42Bf6Fd';
 let complaintAbi = [];
 try {
-    complaintAbi = JSON.parse(fs.readFileSync('./ComplaintABI.json', 'utf8'));
+    complaintAbi = JSON.parse(fs.readFileSync(path.join(__dirname, 'ComplaintABI.json'), 'utf8'));
 } catch (e) {
     console.warn('ComplaintABI.json not found or invalid - complaint features will be disabled until ABI is provided.');
 }
@@ -36,7 +36,7 @@ try {
 const DOCUMENT_CONTRACT_ADDRESS = process.env.DOCUMENT_CONTRACT_ADDRESS || '';
 let documentAbi = [];
 try {
-    documentAbi = JSON.parse(fs.readFileSync('./DocumentRegistryABI.json', 'utf8'));
+    documentAbi = JSON.parse(fs.readFileSync(path.join(__dirname, 'DocumentRegistryABI.json'), 'utf8'));
 } catch (e) {
     console.warn('DocumentRegistryABI.json not found or invalid - document anchoring will be disabled until ABI is provided.');
 }

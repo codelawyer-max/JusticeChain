@@ -92,7 +92,8 @@ router.post('/admin/register', async (req, res) => {
             phone, 
             empId, 
             department, 
-            designation, 
+            designation,
+            officerRole,
             officeAddress, 
             state, 
             city 
@@ -100,6 +101,30 @@ router.post('/admin/register', async (req, res) => {
 
         if (!email || !password) {
             return res.status(400).json({ message: 'Email and password are required' });
+        }
+
+        // officerRole is required — no silent defaulting to SUPER_ADMIN
+        const VALID_ROLES = [
+            'SUPER_ADMIN',
+            'INVESTIGATING_OFFICER',
+            'STATION_HOUSE_OFFICER',
+            'PUBLIC_PROSECUTOR',
+            'FORENSIC_ANALYST',
+            'COURT_REGISTRAR'
+        ];
+
+        if (!officerRole) {
+            return res.status(400).json({
+                message: 'officerRole is required',
+                validRoles: VALID_ROLES
+            });
+        }
+
+        if (!VALID_ROLES.includes(officerRole)) {
+            return res.status(400).json({
+                message: `Invalid officerRole "${officerRole}"`,
+                validRoles: VALID_ROLES
+            });
         }
 
         const existingAdmin = await Admin.findOne({ email });
@@ -116,12 +141,13 @@ router.post('/admin/register', async (req, res) => {
             empId,
             department,
             designation,
+            officerRole,
             officeAddress,
             state,
             city
         });
         
-        console.log("Saving new admin:", { email, fullName, empId });
+        console.log("Saving new admin:", { email, fullName, empId, officerRole });
         await newAdmin.save();
         console.log("Admin saved successfully");
 
@@ -157,11 +183,24 @@ router.post('/admin/login', async (req, res) => {
             return res.status(400).json({ message: 'Invalid password' });
         }
 
+        // Legacy admins fallback to SUPER_ADMIN
+        const officerRole = admin.officerRole || 'SUPER_ADMIN';
+        if (!admin.officerRole) {
+            admin.officerRole = officerRole;
+            await admin.save();
+        }
+
         // ---- ADD JWT HERE ----
         const token = jwt.sign(
-            { id: admin._id, email: admin.email, role: "admin" },
+            {
+                id:          admin._id,
+                email:       admin.email,
+                role:        'admin',
+                officerRole: officerRole,
+                department:  admin.department || null
+            },
             process.env.JWT_SECRET,
-            { expiresIn: "7d" }
+            { expiresIn: '7d' }
         );
         // -----------------------
 

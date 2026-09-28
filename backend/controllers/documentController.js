@@ -5,6 +5,7 @@ const pinataSDK = require('@pinata/sdk');
 
 const Document = require('../models/document');
 const DocumentVersion = require('../models/documentVersion');
+const DocumentPermission = require('../models/documentPermission');
 const Case = require('../models/case');
 
 const { calculateSHA256 } = require('../utils/documentHash');
@@ -474,6 +475,36 @@ const getDocuments = async (req, res) => {
             filter.$text = { $search: search };
         }
 
+        // ── Permission filtering ──────────────────────────────────────────────
+        // SUPER_ADMIN sees everything. Everyone else sees only documents they
+        // uploaded or have an ACTIVE DocumentPermission with view:true for.
+        const requesterId   = req.user?._id || req.user?.id;
+        const isSuperAdmin  = req.user?.officerRole === 'SUPER_ADMIN';
+
+        if (!isSuperAdmin) {
+            const now = new Date();
+
+            // Collect IDs of documents this user has been explicitly granted access to
+            const activePerms = await DocumentPermission.find({
+                grantedTo:          requesterId,
+                status:             'ACTIVE',
+                'permissions.view': true,
+                $or: [
+                    { expiresAt: null },
+                    { expiresAt: { $gt: now } }
+                ]
+            }).select('document');
+
+            const permittedDocIds = activePerms.map(p => p.document);
+
+            // Narrow the query: uploader OR explicitly permitted
+            filter.$or = [
+                { uploadedBy: requesterId },
+                { _id: { $in: permittedDocIds } }
+            ];
+        }
+        // ─────────────────────────────────────────────────────────────────────
+
         const pageNumber = Math.max(parseInt(page, 10) || 1, 1);
         const pageSize = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
 
@@ -527,6 +558,36 @@ const getDocumentById = async (req, res) => {
                 message: 'Document not found'
             });
         }
+
+        // ── Access control ────────────────────────────────────────────────────
+        // Allow if: (1) requester is SUPER_ADMIN, OR (2) requester is the uploader,
+        // OR (3) an ACTIVE DocumentPermission with view:true exists and hasn't
+        // expired. Everyone else gets 403 — no audit entry, no information leak.
+        const requesterId    = req.user?._id || req.user?.id;
+        const isSuperAdmin   = req.user?.officerRole === 'SUPER_ADMIN';
+        const isUploader     = String(document.uploadedBy) === String(requesterId);
+
+        if (!isSuperAdmin && !isUploader) {
+            const now = new Date();
+            const activePerm = await DocumentPermission.findOne({
+                document:          document._id,
+                grantedTo:         requesterId,
+                status:            'ACTIVE',
+                'permissions.view': true,
+                $or: [
+                    { expiresAt: null },
+                    { expiresAt: { $gt: now } }
+                ]
+            });
+
+            if (!activePerm) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'You do not have permission to view this document'
+                });
+            }
+        }
+        // ─────────────────────────────────────────────────────────────────────
 
         const versions = await DocumentVersion.find({
             document: document._id
