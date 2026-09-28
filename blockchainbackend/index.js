@@ -32,7 +32,7 @@ try {
     console.warn('ComplaintABI.json not found or invalid - complaint features will be disabled until ABI is provided.');
 }
 
-// Document registry contract config (new)
+// Document registry contract config
 const DOCUMENT_CONTRACT_ADDRESS = process.env.DOCUMENT_CONTRACT_ADDRESS || '';
 let documentAbi = [];
 try {
@@ -45,7 +45,7 @@ let provider = null;
 let wallet = null;
 let contract = null;
 let complaintContract = null;
-let documentContract = null; // new
+let documentContract = null;
 
 // Initialize provider / wallet / contracts with defensive error handling so the server can still start
 try {
@@ -74,7 +74,6 @@ try {
     }
 } catch (initErr) {
     console.error('Error initializing blockchain provider/wallet/contracts:', initErr && initErr.message ? initErr.message : initErr);
-    // Keep contract variables null and allow the HTTP server to start so health checks and actionable errors work.
 }
 
 app.get('/', (req, res) => {
@@ -93,7 +92,6 @@ app.get('/health', async (req, res) => {
     };
     if (provider) {
         try {
-            // quick provider check
             const block = await provider.getBlockNumber();
             status.provider = { ok: true, latestBlock: block };
         } catch (provErr) {
@@ -106,10 +104,10 @@ app.get('/health', async (req, res) => {
     return res.json({ success: true, status });
 });
 
-// Anchor a document's hash on-chain (new)
+// Anchor a document's hash on-chain — writes to the real DocumentRegistry contract
 app.post('/api/anchorDocument', async (req, res) => {
     try {
-        const { documentId, sha256Hash, ipfsHash } = req.body || {};
+        const { documentId, sha256Hash, ipfsHash, officerAddress } = req.body || {};
 
         if (!documentId || !sha256Hash) {
             return res.status(400).json({
@@ -139,7 +137,12 @@ app.post('/api/anchorDocument', async (req, res) => {
         return res.json({
             success: true,
             message: 'Document anchored on blockchain',
-            txHash: receipt.hash
+            txHash: receipt.hash,
+            blockNumber: receipt.blockNumber,
+            anchoredAt: new Date().toISOString(),
+            payload: {
+                officer: officerAddress || wallet.address
+            }
         });
 
     } catch (err) {
@@ -151,7 +154,7 @@ app.post('/api/anchorDocument', async (req, res) => {
     }
 });
 
-// Look up an anchored document's on-chain record (new)
+// Look up an anchored document's on-chain record
 app.get('/api/verifyDocument/:documentId', async (req, res) => {
     try {
         const { documentId } = req.params;
@@ -260,7 +263,6 @@ app.post('/api/uploadFIR', async (req, res) => {
         tx.wait().then(receipt => {
             console.log('mintFir confirmed in block:', receipt.blockNumber, 'txHash:', receipt.hash);
 
-            // Also fire fileComplaint in background after mint confirms
             if (complaintContract && typeof complaintContract.fileComplaint === 'function') {
                 complaintContract.fileComplaint(
                     firData.incidentType || firData.title || 'Untitled FIR',
@@ -337,74 +339,12 @@ app.post('/api/closeFIR', async (req, res) => {
         console.log('Closing FIR tokenId:', tokenId);
         const tx = await contract.closeFir(tokenId);
         const receipt = await tx.wait();
-        console.log('closeFir tx mined:', receipt.transactionHash);
+        console.log('closeFir tx mined:', receipt.hash);
 
-        return res.json({ success: true, message: 'FIR closed (burned)', txHash: receipt.transactionHash });
+        return res.json({ success: true, message: 'FIR closed (burned)', txHash: receipt.hash });
     } catch (err) {
         console.error('Error closing FIR on chain:', err && err.message ? err.message : err);
         return res.status(500).json({ success: false, error: err && err.message ? err.message : String(err) });
-    }
-});
-
-// ── Document anchoring ────────────────────────────────────────────────────────
-app.post('/api/anchorDocument', async (req, res) => {
-    try {
-        if (!wallet || !provider) {
-            return res.status(503).json({
-                success: false,
-                error: 'Blockchain wallet not configured — check PRIVATE_KEY and RPC_URL'
-            });
-        }
-
-        const { documentId, sha256Hash, ipfsHash, officerAddress } = req.body || {};
-
-        if (!documentId || !sha256Hash) {
-            return res.status(400).json({
-                success: false,
-                error: 'documentId and sha256Hash are required'
-            });
-        }
-
-        const anchorPayload = {
-            v: 1,
-            type: 'DOC_ANCHOR',
-            docId:    documentId,
-            sha256:   sha256Hash,
-            ipfsHash: ipfsHash   || null,
-            officer:  officerAddress || wallet.address,
-            ts:       Math.floor(Date.now() / 1000)
-        };
-
-        const payloadHex = '0x' + Buffer.from(
-            JSON.stringify(anchorPayload), 'utf8'
-        ).toString('hex');
-
-        console.log(`[Anchor] Anchoring document ${documentId} on-chain…`);
-
-        const tx = await wallet.sendTransaction({
-            to:    wallet.address,
-            value: 0n,
-            data:  payloadHex
-        });
-
-        console.log(`[Anchor] tx sent: ${tx.hash} — waiting for confirmation…`);
-        const receipt = await tx.wait(1);
-        console.log(`[Anchor] confirmed in block ${receipt.blockNumber}`);
-
-        return res.json({
-            success:     true,
-            txHash:      receipt.hash,
-            blockNumber: receipt.blockNumber,
-            anchoredAt:  new Date().toISOString(),
-            payload:     anchorPayload
-        });
-
-    } catch (err) {
-        console.error('[Anchor] anchorDocument error:', err && err.message ? err.message : err);
-        return res.status(500).json({
-            success: false,
-            error:   err && err.message ? err.message : String(err)
-        });
     }
 });
 

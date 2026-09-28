@@ -220,6 +220,13 @@ const uploadDocument = async (req, res) => {
 
         /*
          * 12. Create Document
+         *
+         * NOTE: blockchain anchoring does NOT happen here. It happens
+         * later, deliberately, when an admin/officer reviews and calls
+         * the /:id/anchor endpoint. That's what turns a stored hash
+         * into a genuine attestation tied to an accountable person —
+         * anchoring at upload time would just prove a file exists,
+         * not that anyone in authority reviewed it.
          */
         const document =
             await Document.create({
@@ -320,8 +327,8 @@ const uploadDocument = async (req, res) => {
             });
 
         /*
-    * 13.5 Record audit trail entry
-    */
+         * 13.5 Record audit trail entry
+         */
         await logAudit({
             action: 'DOCUMENT_UPLOADED',
             performedBy: userId,
@@ -337,64 +344,6 @@ const uploadDocument = async (req, res) => {
             },
             req
         });
-
-
-        /*
-         * 13.6 Anchor document hash on blockchain (non-blocking)
-         *
-         * If this fails (network hiccup, RPC issue, etc.), the
-         * upload itself still succeeds. blockchainVerified simply
-         * stays false until this succeeds on a retry, or is done
-         * manually later. Anchoring is an enhancement layer on top
-         * of the core upload, not a hard dependency for it.
-         */
-        let blockchainTxHash = null;
-        let blockchainVerified = false;
-
-        try {
-            const anchorResponse = await axios.post(
-                `${BLOCKCHAIN_BACKEND_URL}/api/anchorDocument`,
-                {
-                    documentId: document.documentId,
-                    sha256Hash,
-                    ipfsHash
-                },
-                { timeout: 30000 }
-            );
-
-            if (anchorResponse.data && anchorResponse.data.success) {
-                blockchainTxHash = anchorResponse.data.txHash;
-                blockchainVerified = true;
-
-                await Document.findByIdAndUpdate(document._id, {
-                    'integrity.blockchainTxHash': blockchainTxHash,
-                    'integrity.blockchainVerified': true,
-                    'integrity.lastVerifiedAt': new Date()
-                });
-
-                await DocumentVersion.findByIdAndUpdate(documentVersion._id, {
-                    'integrity.blockchainTxHash': blockchainTxHash,
-                    'integrity.blockchainVerified': true
-                });
-
-                await logAudit({
-                    action: 'BLOCKCHAIN_REGISTERED',
-                    performedBy: userId,
-                    performedByModel: uploadedByModel,
-                    case: caseId,
-                    document: document._id,
-                    documentVersion: documentVersion._id,
-                    description: `Document "${title}" (${document.documentId}) hash anchored on blockchain`,
-                    metadata: { txHash: blockchainTxHash },
-                    req
-                });
-            }
-        } catch (chainError) {
-            console.warn(
-                'Blockchain anchoring failed (document upload still succeeded):',
-                chainError.message
-            );
-        }
 
 
         /*
@@ -444,9 +393,9 @@ const uploadDocument = async (req, res) => {
             integrity: {
                 sha256Hash,
 
-                blockchainVerified,
+                blockchainVerified: false,
 
-                blockchainTxHash
+                blockchainTxHash: null
             }
         });
 
@@ -605,8 +554,6 @@ const getDocumentById = async (req, res) => {
     } catch (error) {
         console.error('Get document by ID error:', error);
 
-        // Always attempt to audit a failed view — fire-and-forget, safe even
-        // when the error occurred before the document or viewerId were resolved.
         await logAudit({
             action: 'DOCUMENT_VIEWED',
             performedBy: req.user?._id || req.user?.id || null,
@@ -631,17 +578,17 @@ const getDocumentById = async (req, res) => {
 };
 
 
-// Anchor a document's SHA-256 hash on-chain via the blockchain sidecar.
+// Anchor + verify a document: an admin/officer reviews the document, then
+// calls this endpoint. On success, this:
+//   1. Writes the document's hash to the real DocumentRegistry contract
+//      via the blockchain sidecar.
+//   2. Patches Document.integrity with the txHash, sets blockchainVerified.
+//   3. Flips Document.status to 'Verified' — this is the actual "digital
+//      stamp" moment: a specific, identity-checked officer has vouched for
+//      this document, and that action is now permanently on-chain.
+//   4. Writes a BLOCKCHAIN_REGISTERED audit entry.
 //
-// Flow:
-//   1. Load the document and verify it hasn't been anchored already.
-//   2. POST to the blockchain backend's /api/anchorDocument with the hash +
-//      IPFS hash. The sidecar sends a 0-ETH self-transaction whose `data`
-//      field encodes the payload; returns a txHash once the tx is confirmed.
-//   3. Patch Document.integrity with the txHash, set blockchainVerified = true.
-//   4. Write a BLOCKCHAIN_REGISTERED audit entry.
-//
-// POST /api/documents/:id/anchor
+// POST /api/documents/:id/anchor  (admin only, enforced in documentRoutes.js)
 const anchorDocument = async (req, res) => {
     const actorId    = req.user?._id || req.user?.id || null;
     const actorModel = req.user?.role === 'admin' ? 'Admin' : 'Citizen';
@@ -723,11 +670,21 @@ const anchorDocument = async (req, res) => {
             });
         }
 
-        // ── Patch the Document integrity fields ──────────────────────────────
+        // ── Patch the Document: integrity + status ───────────────────────────
         document.integrity.blockchainTxHash   = chainResult.txHash;
         document.integrity.blockchainVerified = true;
         document.integrity.lastVerifiedAt     = new Date(chainResult.anchoredAt);
+        document.status                       = 'Verified';
         await document.save();
+
+        // Keep the current DocumentVersion in sync too
+        await DocumentVersion.findOneAndUpdate(
+            { document: document._id, isCurrent: true },
+            {
+                'integrity.blockchainTxHash': chainResult.txHash,
+                'integrity.blockchainVerified': true
+            }
+        );
 
         // ── Audit trail ──────────────────────────────────────────────────────
         await logAudit({
@@ -736,7 +693,7 @@ const anchorDocument = async (req, res) => {
             performedByModel: actorModel,
             case:             document.case  || null,
             document:         document._id,
-            description:      `Document "${document.title}" (${document.documentId}) anchored on-chain`,
+            description:      `Document "${document.title}" (${document.documentId}) verified and anchored on-chain`,
             metadata: {
                 sha256Hash,
                 txHash:      chainResult.txHash,
@@ -750,11 +707,12 @@ const anchorDocument = async (req, res) => {
 
         return res.status(200).json({
             success:    true,
-            message:    'Document anchored on-chain',
+            message:    'Document verified and anchored on-chain',
             document: {
                 id:         document._id,
                 documentId: document.documentId,
-                title:      document.title
+                title:      document.title,
+                status:     document.status
             },
             integrity: {
                 sha256Hash,
