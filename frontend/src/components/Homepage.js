@@ -51,18 +51,18 @@ const Homepage = () => {
 
   const announcements = [
     {
-      date: "25 Jan 2025",
+      date: "25 Sep 2026",
       title: "New Online FIR Categories Added",
       description:
         "Cybercrime and financial fraud categories now available for online filing.",
     },
     {
-      date: "20 Jan 2025",
+      date: "20 Sep 2026",
       title: "System Maintenance Notice",
-      description: "Scheduled maintenance on 28th Jan from 2:00 AM to 4:00 AM.",
+      description: "Scheduled maintenance on 28th Sep from 2:00 AM to 4:00 AM.",
     },
     {
-      date: "15 Jan 2025",
+      date: "15 Sep 2026",
       title: "Enhanced Security Features",
       description:
         "Two-factor authentication now mandatory for all FIR submissions.",
