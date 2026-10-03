@@ -29,12 +29,13 @@ const Footer = () => {
               </div>
               <div className="ml-3">
                 <h3 className="text-lg font-bold">JusticeChain</h3>
-                <p className="text-sm text-gray-400">Secure Legal Records Portal</p>
+                <p className="text-sm text-gray-400">DLT-Based Legal Document Integrity</p>
               </div>
             </div>
             <p className="text-gray-300 mb-6 leading-relaxed">
-              A secure, role-based platform for managing investigation records,
-              forensic reports, court filings, legal notices, and judgements.
+              A distributed-ledger-backed platform providing tamper-evidence,
+              verifiable provenance, and chain-of-custody for investigation
+              records, forensic reports, court filings, and legal outcomes.
             </p>
             <div className="flex flex-wrap gap-4">
               <div className="flex items-center text-sm text-gray-400">

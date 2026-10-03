@@ -806,10 +806,177 @@ const anchorDocument = async (req, res) => {
     }
 };
 
+// Verify a document's integrity by comparing its stored SHA-256 hash against
+// the hash anchored on-chain via the blockchain sidecar.
+//
+// GET /api/documents/:id/verify
+const verifyDocument = async (req, res) => {
+    const actorId    = req.user?._id || req.user?.id || null;
+    const actorModel = req.user?.role === 'admin' ? 'Admin' : 'Citizen';
+
+    try {
+        const { id } = req.params;
+
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid document ID'
+            });
+        }
+
+        const document = await Document.findById(id);
+
+        if (!document) {
+            return res.status(404).json({
+                success: false,
+                message: 'Document not found'
+            });
+        }
+
+        const storedHash = document.integrity?.sha256Hash;
+
+        if (!storedHash) {
+            return res.status(422).json({
+                success: false,
+                message: 'Document has no SHA-256 hash on record'
+            });
+        }
+
+        if (!document.integrity?.blockchainVerified || !document.integrity?.blockchainTxHash) {
+            // Not yet anchored — nothing on-chain to compare against
+            await logAudit({
+                action:           'INTEGRITY_CHECK',
+                performedBy:      actorId,
+                performedByModel: actorModel,
+                case:             document.case || null,
+                document:         document._id,
+                description:      `Integrity check skipped for "${document.title}" — not yet anchored on-chain`,
+                req,
+                status:           'FAILED'
+            });
+
+            return res.status(200).json({
+                success:  true,
+                verified: null,
+                message:  'Document is not yet anchored on-chain — verification not possible',
+                integrity: {
+                    sha256Hash:         storedHash,
+                    blockchainVerified: false,
+                    blockchainTxHash:   null
+                }
+            });
+        }
+
+        // ── Call the blockchain sidecar to fetch on-chain record ──────────────
+        let onChainData;
+        try {
+            const response = await axios.get(
+                `${BLOCKCHAIN_BACKEND_URL}/api/verifyDocument/${encodeURIComponent(document.documentId)}`,
+                { timeout: 30_000 }
+            );
+            onChainData = response.data;
+        } catch (chainErr) {
+            const errMsg = chainErr.response?.data?.error
+                || chainErr.message
+                || String(chainErr);
+
+            await logAudit({
+                action:           'INTEGRITY_CHECK',
+                performedBy:      actorId,
+                performedByModel: actorModel,
+                case:             document.case || null,
+                document:         document._id,
+                description:      `Integrity check FAILED for "${document.title}": sidecar error — ${errMsg}`,
+                metadata:         { error: errMsg },
+                req,
+                status:           'FAILED'
+            });
+
+            return res.status(502).json({
+                success: false,
+                message: 'Could not reach blockchain sidecar for verification',
+                error:   errMsg
+            });
+        }
+
+        // ── Compare hashes ───────────────────────────────────────────────────
+        const onChainHash = onChainData?.sha256Hash;
+        const hashMatch   = storedHash === onChainHash;
+
+        const auditAction = hashMatch ? 'INTEGRITY_VERIFIED' : 'INTEGRITY_FAILED';
+        const auditDesc   = hashMatch
+            ? `Integrity VERIFIED for "${document.title}" (${document.documentId}) — stored hash matches on-chain hash`
+            : `Integrity MISMATCH for "${document.title}" (${document.documentId}) — stored=${storedHash}, on-chain=${onChainHash}`;
+
+        await logAudit({
+            action:           auditAction,
+            performedBy:      actorId,
+            performedByModel: actorModel,
+            case:             document.case || null,
+            document:         document._id,
+            description:      auditDesc,
+            metadata: {
+                storedHash,
+                onChainHash,
+                match: hashMatch,
+                anchoredBy: onChainData?.anchoredBy || null,
+                timestamp:  onChainData?.timestamp  || null
+            },
+            req,
+            status: hashMatch ? 'SUCCESS' : 'FAILED'
+        });
+
+        // Update lastVerifiedAt on successful verification
+        if (hashMatch) {
+            await Document.findByIdAndUpdate(document._id, {
+                'integrity.lastVerifiedAt': new Date()
+            });
+        }
+
+        return res.status(200).json({
+            success:  true,
+            verified: hashMatch,
+            message:  hashMatch
+                ? 'Document integrity verified — hash matches on-chain record'
+                : 'Document integrity MISMATCH — stored hash does not match on-chain record',
+            integrity: {
+                sha256Hash:         storedHash,
+                onChainHash,
+                blockchainTxHash:   document.integrity.blockchainTxHash,
+                blockchainVerified: document.integrity.blockchainVerified,
+                lastVerifiedAt:     new Date(),
+                anchoredBy:         onChainData?.anchoredBy || null,
+                anchoredTimestamp:  onChainData?.timestamp  || null
+            }
+        });
+
+    } catch (error) {
+        console.error('Verify document error:', error);
+
+        await logAudit({
+            action:           'INTEGRITY_CHECK',
+            performedBy:      actorId,
+            performedByModel: actorModel,
+            document:         req.params?.id || null,
+            description:      `Integrity check error for id=${req.params?.id}: ${error.message}`,
+            metadata:         { error: error.message },
+            req,
+            status:           'FAILED'
+        });
+
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to verify document integrity',
+            error:   error.message
+        });
+    }
+};
+
 
 module.exports = {
     uploadDocument,
     getDocuments,
     getDocumentById,
-    anchorDocument
+    anchorDocument,
+    verifyDocument
 };

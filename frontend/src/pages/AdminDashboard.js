@@ -375,7 +375,7 @@ const AdminDashboard = () => {
 
               {/* Status and Timeline */}
               <div className="bg-green-50 rounded-xl p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Case Status & Timeline</h3>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">DLT Audit Trail</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="text-sm font-medium text-gray-700">Current Status</label>
@@ -473,11 +473,11 @@ const AdminDashboard = () => {
         {/* Welcome Section */}
         <div className="mb-8">
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Admin Dashboard</h2>
-          <p className="text-gray-600">Manage FIR applications, track investigations, and update case status.</p>
+          <p className="text-gray-600">Manage FIR applications, track investigations, verify DLT-anchored records, and update case status.</p>
         </div>
 
         {/* Statistics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
           <div className="bg-white rounded-lg shadow p-6">
             <div className="flex items-center">
               <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
@@ -530,6 +530,20 @@ const AdminDashboard = () => {
               <div className="ml-4">
                 <p className="text-2xl font-bold text-gray-900">{stats.resolved || 0}</p>
                 <p className="text-sm text-gray-600">Resolved</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center">
+              <div className="w-12 h-12 bg-indigo-100 rounded-lg flex items-center justify-center">
+                <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                </svg>
+              </div>
+              <div className="ml-4">
+                <p className="text-2xl font-bold text-gray-900">{stats.blockchainVerified || filteredFIRs.filter(f => f.blockchainTxHash || f.tokenId).length || 0}</p>
+                <p className="text-sm text-gray-600">Blockchain Verified</p>
               </div>
             </div>
           </div>

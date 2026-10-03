@@ -32,7 +32,7 @@ const Navbar = () => {
       icon: "M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4",
     },
     {
-      name: "Document Workspace",
+      name: "DLT Integrity Workspace",
       path: "/document-system",
       icon: "M4 5a2 2 0 012-2h12a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm4 3h8m-8 4h8m-8 4h5",
     },
@@ -96,7 +96,7 @@ const Navbar = () => {
                   JusticeChain
                 </h1>
                 <p className="text-sm text-gray-600">
-                  डिजिटल दस्तावेज़ प्रणाली | Legal Records Portal
+                  DLT-आधारित दस्तावेज़ अखंडता | Legal Document Integrity
                 </p>
                 <p className="text-xs text-blue-800">
                   Ministry of Home Affairs, Government of India

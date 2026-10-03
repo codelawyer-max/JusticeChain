@@ -94,15 +94,15 @@ const Homepage = () => {
             <h1 className="text-6xl font-bold mb-6">
               <div className="text-gray-900">JusticeChain</div>
               <div className="" style={{ color: "#0a50c2" }}>
-                Document System
+                DLT-Based Legal Document Integrity
               </div>
-              <div className="text-gray-900">for Every Case</div>
             </h1>
 
             {/* Description */}
             <p className="text-xl text-gray-600 max-w-4xl mx-auto leading-relaxed mb-12">
-              A secure, role-based workspace for investigation records, forensic
-              reports, court filings, legal notices, and judgements.
+              Prevent document tampering and provide verifiable provenance for
+              legal and investigation records — backed by distributed ledger
+              technology, IPFS, and cryptographic hashing.
             </p>
           </div>
 
@@ -112,7 +112,7 @@ const Homepage = () => {
               to="/document-system"
               className="bg-gray-900 hover:bg-teal-800 text-white px-10 py-5 rounded-2xl font-bold text-lg shadow-lg btn-enhanced hover-lift focus-indicator flex items-center transition-all duration-300"
             >
-              Open Document Workspace
+              Open DLT Integrity Workspace
             </Link>
             <Link
               to="/file-fir"

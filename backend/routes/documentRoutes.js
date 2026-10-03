@@ -7,7 +7,8 @@ const {
     uploadDocument,
     getDocuments,
     getDocumentById,
-    anchorDocument
+    anchorDocument,
+    verifyDocument
 } = require('../controllers/documentController');
 
 const router = express.Router();
@@ -52,6 +53,15 @@ router.post(
         next();
     },
     anchorDocument
+);
+
+// Verify a document's integrity by comparing its stored hash against
+// the on-chain record.  Any authenticated user can verify — this is
+// a read-only integrity check, not a state mutation.
+router.get(
+    '/:id/verify',
+    verifyToken,
+    verifyDocument
 );
 
 module.exports = router;
