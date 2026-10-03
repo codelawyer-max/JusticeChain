@@ -1,16 +1,14 @@
 # ⚖️ JusticeChain
 
-> **Smart India Hackathon (SIH) 2026**  
-> **Problem Statement ID:** PS 26194 — *Student Innovation: Distributed Ledger Technology (DLT)*  
-> **Domain:** Legal, Law Enforcement & Digital Judiciary  
-> **Product Identity:** DLT-Based Chain of Custody & Tamper-Evident Integrity System for Legal & Investigation Records
+> **DLT-Based Chain of Custody & Tamper-Evident Integrity System for Legal & Investigation Records**  
+> Enterprise-grade decentralized infrastructure for law enforcement, digital forensics, and judiciary record management.
 
 ---
 
-[![SIH 2026](https://img.shields.io/badge/SIH-2026-orange?style=for-the-badge&logo=target)](https://www.sih.gov.in/)
-[![Problem Statement](https://img.shields.io/badge/Problem%20Statement-PS%2026194-blue?style=for-the-badge)](https://www.sih.gov.in/)
 [![DLT](https://img.shields.io/badge/DLT-Ethereum%20%7C%20EVM%20%7C%20IPFS-6366f1?style=for-the-badge&logo=ethereum)](https://ethereum.org/)
 [![ZK-Proof](https://img.shields.io/badge/Privacy-Circom%20ZK--Snarks-emerald?style=for-the-badge)](https://iden3.io/)
+[![Smart Contracts](https://img.shields.io/badge/Solidity-0.8.x-363636?style=for-the-badge&logo=solidity)](https://soliditylang.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-v20+-339933?style=for-the-badge&logo=nodedotjs)](https://nodejs.org/)
 [![License](https://img.shields.io/badge/License-ISC-green?style=for-the-badge)](./LICENSE)
 
 ---
@@ -26,9 +24,9 @@ In traditional criminal justice and policing systems, records such as **First In
 
 ---
 
-## 🎯 Alignment with SIH 2026: PS 26194
+## 🎯 Key Architectural Objectives & DLT Capabilities
 
-| Requirement | How JusticeChain Delivers |
+| Core Capability | How JusticeChain Delivers |
 |---|---|
 | **Distributed Ledger Application** | Uses EVM smart contracts (`DocumentRegistry.sol`, `FIR.sol`, `Complaint.sol`) to anchor hashes, timestamps, and custodial state transitions immutably. |
 | **Tamper-Evident Chain of Custody** | Cryptographic fingerprinting (SHA-256) anchored on-chain with independent verification via `GET /api/documents/:id/verify`. |
@@ -356,9 +354,9 @@ Access the application in your browser at: **`http://localhost:5173`**
 
 ---
 
-## 👥 Hackathon Team & Acknowledgements
+## 👥 Project Information & Acknowledgements
 
-Developed for **Smart India Hackathon (SIH) 2026** under Problem Statement **PS 26194** (*Student Innovation — Distributed Ledger Technology*).
+Developed and maintained by the JusticeChain project contributors.
 
 - **Repository:** [codelawyer-max/JusticeChain](https://github.com/codelawyer-max/JusticeChain)
 - **License:** Open source under the [ISC License](LICENSE).
